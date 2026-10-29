@@ -1,34 +1,26 @@
-import { sql } from "drizzle-orm"
-import {
-  boolean,
-  check,
-  index,
-  integer,
-  pgTable,
-  text,
-  timestamp,
-} from "drizzle-orm/pg-core"
+import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import { nanoid } from "nanoid"
 
-export const todos = pgTable(
-  "todos",
+export const bots = pgTable(
+  "bots",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
     userId: text("user_id").notNull(),
-    title: text("title").notNull(),
-    completed: boolean("completed").notNull().default(false),
+    name: text("name").notNull(),
+    avatar: text("avatar")
+      .notNull()
+      .$defaultFn(() => nanoid()),
+    job: text("job").notNull(),
+    instructions: text("instructions"),
+    sandboxId: text("sandbox_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
   },
-  (table) => [
-    index("todos_user_id_idx").on(table.userId),
-    check("todos_title_not_empty", sql`length(btrim(${table.title})) > 0`),
-  ]
+  (table) => [index("bots_user_id_idx").on(table.userId)]
 )
 
-export type Todo = typeof todos.$inferSelect
-export type NewTodo = typeof todos.$inferInsert
+export type Bot = typeof bots.$inferSelect
+export type NewBot = typeof bots.$inferInsert
