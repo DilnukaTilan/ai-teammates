@@ -46,6 +46,58 @@ npm run lint
 npm run build
 ```
 
+## Database
+
+Drizzle ORM connects to Neon using its HTTP driver. The server-only client is
+exported as `db` from `@/lib/db`; table definitions belong in `lib/db/schema.ts`.
+The `todos` table stores a title, completion status, creation/update timestamps,
+and the owning Clerk user ID. Titles must contain non-whitespace text. Drizzle
+automatically updates `updatedAt` when it updates a task; raw SQL updates must set
+`updated_at` explicitly.
+
+The existing ignored `.env.local` contains both connection strings. On another
+machine, supply these values from the same Neon branch:
+
+```dotenv
+# Pooled connection for application queries (hostname contains -pooler).
+DATABASE_URL="postgresql://USER:PASSWORD@ENDPOINT-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require"
+# Direct connection for Drizzle Kit schema pushes (hostname has no -pooler).
+DATABASE_URL_UNPOOLED="postgresql://USER:PASSWORD@ENDPOINT.REGION.aws.neon.tech/DATABASE?sslmode=require"
+```
+
+Drizzle Kit loads `.env*` files with Next.js's `@next/env`, including `.env.local`.
+Use environment variables for the target branch when running against another
+environment. Keep both URLs private and configure them on the deployment host.
+
+After adding or changing table definitions:
+
+```bash
+npm run db:push    # Apply the schema directly to the configured database.
+npm run db:studio  # Browse the database locally.
+```
+
+Keep `lib/db/schema.ts` as the schema source of truth. Apply schema changes with
+database pushes only; do not generate or run migrations or keep migration files,
+snapshots, or journals. Review Drizzle Kit's proposed changes before applying them.
+
+Query from a Server Component, Route Handler, or Server Action:
+
+```ts
+import { auth } from "@clerk/nextjs/server"
+import { eq } from "drizzle-orm"
+import { db } from "@/lib/db"
+import { todos } from "@/lib/db/schema"
+
+const { userId } = await auth.protect()
+const tasks = await db.select().from(todos).where(eq(todos.userId, userId))
+```
+
+For private application tables, also scope each query to the authenticated user's
+ID or authorized organization. The HTTP driver supports individual queries and
+batched transactions; use a different driver if you need interactive transactions.
+See the [Neon Drizzle guide](https://neon.com/docs/guides/drizzle) and
+[Drizzle Neon documentation](https://orm.drizzle.team/docs/get-started/neon-new).
+
 ## Adding components
 
 To add components to your app, run the following command:
