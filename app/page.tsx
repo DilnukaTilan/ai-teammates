@@ -1,26 +1,44 @@
-import Link from "next/link"
+import { auth } from "@clerk/nextjs/server"
+import { PlusIcon } from "lucide-react"
+import { randomUUID } from "node:crypto"
 
+import { ChatAvatar } from "@/components/chat-avatar"
 import { Button } from "@/components/ui/button"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 
-export default function Page() {
+export default async function Page() {
+  await auth.protect()
+  const avatarSeed = randomUUID()
+
   return (
-    <main className="flex p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
-        <div>
-          <h1 className="text-2xl font-semibold">Welcome to AI Teammates</h1>
-          <p>Sign in or create an account to open your workspace.</p>
-          <Button
-            className="mt-2"
-            nativeButton={false}
-            render={<Link href="/dashboard" prefetch={false} />}
-          >
-            Open dashboard
+    <main className="flex min-h-[calc(100svh-4rem)] p-6">
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia>
+            <ChatAvatar seed={avatarSeed} className="size-12" />
+          </EmptyMedia>
+          <EmptyTitle>
+            <h1>Meet your first bot</h1>
+          </EmptyTitle>
+          <EmptyDescription>
+            Every bot gets its own personality, memory, and face. Spin one up and
+            start the conversation.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button variant="secondary">
+            <PlusIcon data-icon="inline-start" aria-hidden="true" />
+            Create a new bot
           </Button>
-        </div>
-        <div className="font-mono text-xs text-muted-foreground">
-          (Press <kbd>d</kbd> to toggle dark mode)
-        </div>
-      </div>
+        </EmptyContent>
+      </Empty>
     </main>
   )
 }

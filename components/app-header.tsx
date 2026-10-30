@@ -25,13 +25,6 @@ export function AppHeader() {
             </SignUpButton>
           </Show>
           <Show when="signed-in">
-            <Button
-              variant="ghost"
-              nativeButton={false}
-              render={<Link href="/dashboard" prefetch={false} />}
-            >
-              Dashboard
-            </Button>
             <UserButton />
           </Show>
         </Suspense>

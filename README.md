@@ -9,9 +9,9 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Use **Create account** or
-**Sign in** in the header. Clerk's profile menu provides account management and
-sign-out controls.
+Open [http://localhost:3000](http://localhost:3000). Signed-out visitors are
+redirected to sign in, where they can also create an account. Clerk's profile
+menu provides account management and sign-out controls.
 
 Clerk is configured against the `ai-teammates-dev` application. Development keys
 are stored in the ignored `.env.local` file. On another machine, authenticate to
@@ -29,11 +29,10 @@ production instance and deployment keys with Clerk before deploying.
 
 ## Authentication
 
-- `/` is public.
+- `/` requires a session and redirects signed-out visitors to sign in.
 - `/sign-in` and `/sign-up` host Clerk's prebuilt authentication forms, including
   their nested verification routes.
-- `/dashboard` requires a session and redirects signed-out visitors to sign in.
-- Sign-in and sign-up fall back to `/dashboard`; signing out returns to `/`.
+- Sign-in and sign-up fall back to `/`; signing out also returns to `/`.
 
 `proxy.ts` makes the Clerk session available. Protect every new private page,
 Route Handler, and Server Action with `await auth.protect()` before accessing
