@@ -19,6 +19,55 @@ existing data is considered disposable. Prefer allowing data loss: do not
 backfill, migrate, or preserve existing rows, and do not spend effort maintaining
 old data. With every schema change, start with a clean slate.
 
+## Forms and server actions
+
+- Use the Shadcn skill for form UI, the Clerk skill for authenticated actions,
+  and the Neon skill for database writes. Read the relevant installed Next.js
+  guides before implementing forms or Server Actions.
+- Use `react-hook-form` with `zod` and `@hookform/resolvers/zod`. Compose forms
+  with the existing Shadcn `FieldGroup`, `Field`, `FieldLabel`, and `FieldError`
+  components. Use `Controller` for controlled inputs and `useWatch` for values
+  that drive other UI.
+- Generate database insert validation from the Drizzle table with
+  `createInsertSchema` from `drizzle-zod`. Keep shared validation next to the
+  table in `lib/db/schema.ts`, and derive form schemas with an explicit `.pick()`
+  of editable fields. Infer types from Zod instead of duplicating field shapes.
+- Share the form schema between the client and server. Trim text, reject blank
+  required values, and set sensible length limits. Use callback refinements
+  such as `instructions: (schema) => schema.trim().max(10000)` to preserve
+  Drizzle's nullable and optional behavior; supplying a replacement Zod schema
+  overrides that behavior. Keep form defaults compatible with the schema and
+  normalize optional blank text consistently before inserting.
+- Put mutations in `actions/<resource>.ts` with `"use server"`. Authenticate
+  inside every action with Clerk's server utilities, such as
+  `await auth.protect()`, and derive `userId` from that result. Validate input
+  again on the server; client validation and TypeScript types are insufficient.
+- Accept only editable fields from the client. Set ownership on the server and
+  leave IDs, timestamps, and other system fields to server or database defaults.
+  Import the database client only in server code and reuse the existing Neon
+  connection. Adding validation alone does not require a database schema push.
+- Return structured success, field errors, and safe failure messages. Map server
+  field errors back to the form, show an accessible form-level error for other
+  failures, and preserve entered values on failure. Keep database error details
+  on the server. Revalidate affected paths after a successful write.
+- Use visible labels linked to unique control IDs, `data-invalid` on `Field`,
+  `aria-invalid` on controls, and `aria-describedby` for error messages. Give
+  non-submit buttons `type="button"`. Disable submission and conflicting controls
+  while saving and show a pending indicator. Close the dialog after a successful
+  submission, allow cancellation when idle, and reset when starting a new form
+  session.
+- Reuse `components/ui/dialog.tsx` for modal forms, including its title,
+  description, and footer. This project uses Base UI: compose triggers and close
+  controls with `render`, not Radix's `asChild`. Use `ToggleGroup` for preset
+  choices; presets should populate editable form values. Match supplied designs
+  using existing components and semantic theme tokens, and keep dialogs usable
+  on small screens with a bounded height and scrolling.
+- Verify types, lint, formatting, and the production build. Check schema and
+  action boundaries, including unauthenticated requests, invalid input, forged
+  ownership/system fields, optional values, and database failures. Inspect the
+  form in the browser for layout, presets, validation, and dismissal. Distinguish
+  mocked action checks from a verified live database insertion when reporting.
+
 ## DiceBear
 
 Use DiceBear 10. Documentation: https://www.dicebear.com/llms.txt

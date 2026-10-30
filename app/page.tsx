@@ -3,6 +3,7 @@ import { PlusIcon } from "lucide-react"
 import { randomUUID } from "node:crypto"
 
 import { ChatAvatar } from "@/components/chat-avatar"
+import { BotDialog } from "@/components/bot-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -28,15 +29,17 @@ export default async function Page() {
             <h1>Meet your first bot</h1>
           </EmptyTitle>
           <EmptyDescription>
-            Every bot gets its own personality, memory, and face. Spin one up and
-            start the conversation.
+            Every bot gets its own personality, memory, and face. Spin one up
+            and start the conversation.
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button variant="secondary">
-            <PlusIcon data-icon="inline-start" aria-hidden="true" />
-            Create a new bot
-          </Button>
+          <BotDialog avatarSeed={avatarSeed}>
+            <Button variant="secondary">
+              <PlusIcon data-icon="inline-start" aria-hidden="true" />
+              Create a new bot
+            </Button>
+          </BotDialog>
         </EmptyContent>
       </Empty>
     </main>
