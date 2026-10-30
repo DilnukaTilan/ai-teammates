@@ -1,12 +1,15 @@
 "use server"
 
 import { auth } from "@clerk/nextjs/server"
+import { nanoid } from "nanoid"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 import { db } from "@/lib/db"
 import {
   bots,
+  chatMembers,
+  chats,
   createBotSchema,
   insertBotSchema,
   type CreateBotInput,
@@ -31,7 +34,19 @@ export async function createBot(input: CreateBotInput) {
   })
 
   try {
-    const [bot] = await db.insert(bots).values(values).returning()
+    // Generate IDs up front so all three inserts can share one atomic batch.
+    const botId = nanoid()
+    const chatId = nanoid()
+    const [[bot]] = await db.batch([
+      db
+        .insert(bots)
+        .values({ ...values, id: botId })
+        .returning(),
+      db
+        .insert(chats)
+        .values({ id: chatId, userId, kind: "direct", name: null }),
+      db.insert(chatMembers).values({ chatId, botId }),
+    ])
 
     if (!bot) {
       return {
