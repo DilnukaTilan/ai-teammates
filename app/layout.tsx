@@ -4,7 +4,6 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 
 import "./globals.css"
-import { AppHeader } from "@/components/app-header"
 import { ThemeProvider } from "@/components/theme-provider"
 import { DirectionProvider } from "@/components/ui/direction"
 import { Toaster as SonnerToaster } from "@/components/ui/sonner"
@@ -54,7 +53,6 @@ export default function RootLayout({
             <DirectionProvider direction="ltr">
               <TooltipProvider>
                 <Toaster>
-                  <AppHeader />
                   {children}
                   <SonnerToaster position="top-right" />
                 </Toaster>

@@ -19,7 +19,7 @@ export default async function Page() {
   const avatarSeed = randomUUID()
 
   return (
-    <main className="flex min-h-[calc(100svh-4rem)] p-6">
+    <main className="flex min-h-svh p-6">
       <Empty>
         <EmptyHeader>
           <EmptyMedia>
