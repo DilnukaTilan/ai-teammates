@@ -37,6 +37,8 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import type { SidebarChat } from "@/queries/bot"
 
@@ -62,8 +64,11 @@ function ChatRow({
 }) {
   return (
     <>
-      <ChatAvatar seed={chat.bot?.avatar ?? chat.id} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <ChatAvatar
+        seed={chat.bot?.avatar ?? chat.id}
+        className="group-data-[collapsible=icon]:size-6"
+      />
+      <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
         <div className="flex min-w-0 items-baseline gap-2">
           <span className="truncate font-medium">
             {chat.bot?.name ?? "New chat"}
@@ -85,6 +90,8 @@ function ChatRow({
 
 export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
   const router = useRouter()
+  const { state, isMobile } = useSidebar()
+  const iconOnly = state === "collapsed" && !isMobile
   const [botDialogOpen, setBotDialogOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const createButtonRef = useRef<HTMLButtonElement>(null)
@@ -121,7 +128,7 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
 
   return (
     <>
-      <Sidebar>
+      <Sidebar collapsible="icon">
         <SidebarHeader>
           <div className="flex justify-end">
             <DropdownMenu>
@@ -167,17 +174,22 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
             aria-haspopup="dialog"
             aria-expanded={searchOpen}
             onClick={() => setSearchOpen(true)}
-            className="h-8 w-full min-w-0 justify-start gap-2 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base font-normal text-muted-foreground transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
+            className="h-8 w-full min-w-0 justify-start gap-2 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base font-normal text-muted-foreground transition-colors outline-none group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:text-sidebar-foreground file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground group-data-[collapsible=icon]:hover:bg-sidebar-accent focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
           >
             <SearchIcon data-icon="inline-start" aria-hidden="true" />
-            <span>Search</span>
-            <Kbd className="ml-auto bg-transparent px-0">{searchShortcut}</Kbd>
+            <span className="group-data-[collapsible=icon]:hidden">Search</span>
+            <Kbd className="ml-auto bg-transparent px-0 group-data-[collapsible=icon]:hidden">
+              {searchShortcut}
+            </Kbd>
           </Button>
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent className="group-data-[collapsible=icon]:overflow-y-auto">
           <SidebarGroup aria-label="Chats">
             <SidebarGroupContent>
-              <SidebarMenu aria-label="Chats">
+              <SidebarMenu
+                aria-label="Chats"
+                className="group-data-[collapsible=icon]:gap-2"
+              >
                 {chats.map((chat) => (
                   <SidebarMenuItem key={chat.id}>
                     <SidebarMenuButton
@@ -185,6 +197,9 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
                         <Link href={`/chats/${encodeURIComponent(chat.id)}`} />
                       }
                       size="lg"
+                      className="group-data-[collapsible=icon]:justify-center"
+                      aria-label={chat.bot?.name ?? "New chat"}
+                      tooltip={chat.bot?.name ?? "New chat"}
                     >
                       <ChatRow chat={chat} referenceDate={referenceDate} />
                     </SidebarMenuButton>
@@ -200,10 +215,10 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
               <SidebarMenuButton
                 render={<div />}
                 size="lg"
-                className="p-0 has-focus-visible:ring-2"
+                className="p-0 group-data-[collapsible=icon]:justify-center has-focus-visible:ring-2"
               >
                 <UserButton
-                  showName
+                  showName={!iconOnly}
                   appearance={{
                     elements: {
                       rootBox: {
@@ -214,7 +229,7 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
                       userButtonTrigger: {
                         width: "100%",
                         height: "100%",
-                        padding: "calc(var(--spacing) * 2)",
+                        padding: iconOnly ? "0" : "calc(var(--spacing) * 2)",
                         borderRadius: "var(--radius-md)",
                         color: "inherit",
                         boxShadow: "none",
@@ -224,12 +239,16 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
                         width: "100%",
                         minWidth: 0,
                         flexDirection: "row-reverse",
-                        justifyContent: "flex-end",
-                        gap: "calc(var(--spacing) * 2)",
+                        justifyContent: iconOnly ? "center" : "flex-end",
+                        gap: iconOnly ? "0" : "calc(var(--spacing) * 2)",
                       },
                       userButtonAvatarBox: {
-                        width: "calc(var(--spacing) * 8)",
-                        height: "calc(var(--spacing) * 8)",
+                        width: iconOnly
+                          ? "calc(var(--spacing) * 6)"
+                          : "calc(var(--spacing) * 8)",
+                        height: iconOnly
+                          ? "calc(var(--spacing) * 6)"
+                          : "calc(var(--spacing) * 8)",
                         flexShrink: 0,
                       },
                       userButtonOuterIdentifier: {
@@ -249,6 +268,7 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
+        <SidebarRail />
       </Sidebar>
       <CommandDialog
         open={searchOpen}

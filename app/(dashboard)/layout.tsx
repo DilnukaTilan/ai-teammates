@@ -1,3 +1,4 @@
+import { cookies } from "next/headers"
 import { Suspense } from "react"
 
 import { AppSidebar } from "@/components/app-sidebar"
@@ -39,13 +40,16 @@ function SidebarLoading() {
   )
 }
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const cookieStore = await cookies()
+  const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false"
+
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={defaultOpen}>
       <Suspense fallback={<SidebarLoading />}>
         <SidebarWithChats />
       </Suspense>
