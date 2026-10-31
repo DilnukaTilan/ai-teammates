@@ -1,19 +1,70 @@
 "use client"
 
 import { UserButton } from "@clerk/nextjs"
+import { PlusIcon, UsersIcon } from "lucide-react"
+import { useId, useRef, useState } from "react"
 
+import { BotDialog } from "@/components/bot-dialog"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
 export function AppSidebar() {
+  const [botDialogOpen, setBotDialogOpen] = useState(false)
+  const createButtonRef = useRef<HTMLButtonElement>(null)
+  const avatarSeed = useId()
+
   return (
     <Sidebar>
+      <SidebarHeader className="flex-row justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                ref={createButtonRef}
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Create new"
+              />
+            }
+          >
+            <PlusIcon aria-hidden="true" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => setBotDialogOpen(true)}>
+                <PlusIcon aria-hidden="true" />
+                Create new bot
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <UsersIcon aria-hidden="true" />
+                Create group chat
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <BotDialog
+          avatarSeed={avatarSeed}
+          open={botDialogOpen}
+          onOpenChange={setBotDialogOpen}
+          finalFocus={createButtonRef}
+        />
+      </SidebarHeader>
       <SidebarContent />
       <SidebarFooter>
         <SidebarMenu>

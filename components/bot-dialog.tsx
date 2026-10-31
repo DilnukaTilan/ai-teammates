@@ -1,6 +1,12 @@
 "use client"
 
-import { useId, useState, type ReactElement } from "react"
+import {
+  useEffect,
+  useId,
+  useState,
+  type ReactElement,
+  type RefObject,
+} from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { ShuffleIcon } from "lucide-react"
 import { Controller, useForm, useWatch } from "react-hook-form"
@@ -59,12 +65,26 @@ const presets = [
 ]
 
 type BotDialogProps = {
-  children: ReactElement
+  children?: ReactElement
   avatarSeed: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  finalFocus?: RefObject<HTMLElement | null>
 }
 
-export function BotDialog({ children, avatarSeed }: BotDialogProps) {
-  const [open, setOpen] = useState(false)
+export function BotDialog({
+  children,
+  avatarSeed,
+  open: controlledOpen,
+  onOpenChange,
+  finalFocus,
+}: BotDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  function setOpen(nextOpen: boolean) {
+    setInternalOpen(nextOpen)
+    onOpenChange?.(nextOpen)
+  }
   const id = useId()
   const form = useForm<z.input<typeof createBotSchema>>({
     resolver: zodResolver(createBotSchema),
@@ -77,6 +97,18 @@ export function BotDialog({ children, avatarSeed }: BotDialogProps) {
   })
   const job = useWatch({ control: form.control, name: "job" })
   const pending = form.formState.isSubmitting
+  const { reset } = form
+
+  useEffect(() => {
+    if (open) {
+      reset({
+        avatar: crypto.randomUUID(),
+        name: "",
+        job: "",
+        instructions: "",
+      })
+    }
+  }, [open, reset])
 
   async function onSubmit(values: z.output<typeof createBotSchema>) {
     form.clearErrors("root")
@@ -115,19 +147,14 @@ export function BotDialog({ children, avatarSeed }: BotDialogProps) {
       open={open}
       onOpenChange={(nextOpen) => {
         if (pending) return
-        if (nextOpen) {
-          form.reset({
-            avatar: crypto.randomUUID(),
-            name: "",
-            job: "",
-            instructions: "",
-          })
-        }
         setOpen(nextOpen)
       }}
     >
-      <DialogTrigger render={children} />
-      <DialogContent className="max-h-[calc(100svh-2rem)] gap-6 overflow-y-auto sm:max-w-xl">
+      {children && <DialogTrigger render={children} />}
+      <DialogContent
+        finalFocus={finalFocus}
+        className="max-h-[calc(100svh-2rem)] gap-6 overflow-y-auto sm:max-w-xl"
+      >
         <DialogHeader>
           <DialogTitle>New bot</DialogTitle>
           <DialogDescription>
