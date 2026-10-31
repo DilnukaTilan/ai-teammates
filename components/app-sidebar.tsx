@@ -66,7 +66,7 @@ function ChatRow({
     <>
       <ChatAvatar
         seed={chat.bot?.avatar ?? chat.id}
-        className="group-data-[collapsible=icon]:size-6"
+        className="group-data-[collapsible=icon]:size-8"
       />
       <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
         <div className="flex min-w-0 items-baseline gap-2">
