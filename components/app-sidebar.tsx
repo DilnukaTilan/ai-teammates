@@ -4,7 +4,7 @@ import { UserButton } from "@clerk/nextjs"
 import { formatDistanceStrict } from "date-fns"
 import { PlusIcon, SearchIcon, UsersIcon } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
 
 import { BotDialog } from "@/components/bot-dialog"
@@ -89,6 +89,7 @@ function ChatRow({
 }
 
 export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
+  const { chatId } = useParams<{ chatId?: string }>()
   const router = useRouter()
   const { state, isMobile } = useSidebar()
   const iconOnly = state === "collapsed" && !isMobile
@@ -196,6 +197,8 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
                       render={
                         <Link href={`/chats/${encodeURIComponent(chat.id)}`} />
                       }
+                      isActive={chat.id === chatId}
+                      aria-current={chat.id === chatId ? "page" : undefined}
                       size="lg"
                       className="group-data-[collapsible=icon]:justify-center"
                       aria-label={chat.bot?.name ?? "New chat"}

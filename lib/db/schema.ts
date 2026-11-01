@@ -111,8 +111,12 @@ export const createBotSchema = insertBotSchema
   .pick({ name: true, avatar: true, job: true, instructions: true })
   .required({ avatar: true })
 
+export const updateBotSchema = createBotSchema
+
 export type CreateBotInput = z.infer<typeof createBotSchema>
+export type UpdateBotInput = z.infer<typeof updateBotSchema>
 export type Bot = typeof bots.$inferSelect
+export type EditableBot = Pick<Bot, "id" | keyof UpdateBotInput>
 export type NewBot = typeof bots.$inferInsert
 export type Chat = typeof chats.$inferSelect
 export type NewChat = typeof chats.$inferInsert

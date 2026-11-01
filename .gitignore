@@ -44,5 +44,4 @@ next-env.d.ts
 # neon
 .neon
 
-/images
 /state

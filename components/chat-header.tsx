@@ -1,0 +1,33 @@
+import { MonitorIcon } from "lucide-react"
+
+import { BotDialog } from "@/components/bot-dialog"
+import { ChatAvatar } from "@/components/chat-avatar"
+import { Button } from "@/components/ui/button"
+import type { EditableBot } from "@/lib/db/schema"
+
+type ChatHeaderProps = {
+  bot: EditableBot
+}
+
+export function ChatHeader({ bot }: ChatHeaderProps) {
+  return (
+    <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-background px-4 text-foreground sm:px-6">
+      <h1 className="min-w-0">
+        <BotDialog bot={bot}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto max-w-full items-center justify-center gap-3 py-2 pr-4 pl-3"
+            aria-label={`Edit ${bot.name}`}
+          >
+            <ChatAvatar seed={bot.avatar} />
+            <span className="truncate text-lg font-semibold">{bot.name}</span>
+          </Button>
+        </BotDialog>
+      </h1>
+      <Button type="button" variant="ghost" size="icon-lg" aria-label="Desktop">
+        <MonitorIcon aria-hidden="true" />
+      </Button>
+    </header>
+  )
+}
