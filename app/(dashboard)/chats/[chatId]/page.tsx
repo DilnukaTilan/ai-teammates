@@ -3,6 +3,8 @@ import { notFound } from "next/navigation"
 import { ChatHeader } from "@/components/chat-header"
 import { getChat } from "@/queries/chats"
 
+import { Chat } from "./chat"
+
 export default async function Page({
   params,
 }: {
@@ -16,5 +18,10 @@ export default async function Page({
     notFound()
   }
 
-  return <ChatHeader bot={bot} />
+  return (
+    <main className="flex h-dvh flex-col">
+      <ChatHeader bot={bot} />
+      <Chat key={chatId} chatId={chatId} />
+    </main>
+  )
 }
