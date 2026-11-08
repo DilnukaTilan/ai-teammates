@@ -1,8 +1,11 @@
 "use client"
 
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport } from "ai"
+import { TriggerChatTransport } from "@trigger.dev/sdk/chat"
+import { isTextUIPart, type UIMessage } from "ai"
+import { useState } from "react"
 
+import { mintChatAccessToken, startChatSession } from "@/actions/chat"
 import {
   Conversation,
   ConversationContent,
@@ -21,11 +24,31 @@ import {
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input"
 
-export function Chat({ chatId }: { chatId: string }) {
+export function Chat({
+  chatId,
+  initialMessages,
+  lastEventId,
+}: {
+  chatId: string
+  initialMessages: UIMessage[]
+  lastEventId?: string
+}) {
+  const [transport] = useState(() => {
+    const transport = new TriggerChatTransport({
+      task: "teammate-chat",
+      accessToken: ({ chatId }) => mintChatAccessToken(chatId),
+      startSession: ({ chatId }) => startChatSession(chatId),
+    })
+    if (lastEventId) {
+      transport.seedResumeCursor(chatId, lastEventId)
+    }
+    return transport
+  })
+
   const { messages, sendMessage, status, stop, error } = useChat({
-    transport: new DefaultChatTransport({
-      api: `/api/chats/${encodeURIComponent(chatId)}`,
-    }),
+    id: chatId,
+    messages: initialMessages,
+    transport,
   })
   const isGenerating = status === "submitted" || status === "streaming"
 
@@ -42,7 +65,7 @@ export function Chat({ chatId }: { chatId: string }) {
           )}
           {messages.map((message) => {
             const text = message.parts
-              .filter((part) => part.type === "text")
+              .filter(isTextUIPart)
               .map((part) => part.text)
               .join("")
 
