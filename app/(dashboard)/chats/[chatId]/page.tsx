@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 
 import { ChatHeader } from "@/components/chat-header"
 import { getChat } from "@/queries/chats"
+import type { TeammateChatMessage } from "@/trigger/chat"
 
 import { Chat } from "./chat"
 
@@ -19,7 +20,7 @@ export default async function Page({
     notFound()
   }
 
-  const { messages, cursors } = await defaultStorage.load({
+  const { messages, cursors } = await defaultStorage.load<TeammateChatMessage>({
     chatId,
     clientData: undefined,
   })

@@ -1,12 +1,19 @@
 "use server"
 
 import { auth } from "@clerk/nextjs/server"
+import {
+  DaytonaConflictError,
+  DaytonaNotFoundError,
+  type Daytona,
+} from "@daytona/sdk"
 import { and, eq, inArray } from "drizzle-orm"
 import { nanoid } from "nanoid"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { randomUUID } from "node:crypto"
 import { z } from "zod"
 
+import { createDaytona } from "@/lib/daytona"
 import { db } from "@/lib/db"
 import {
   bots,
@@ -15,9 +22,19 @@ import {
   createBotSchema,
   insertBotSchema,
   updateBotSchema,
+  type Bot,
   type CreateBotInput,
   type UpdateBotInput,
 } from "@/lib/db/schema"
+
+async function deleteSandbox(daytona: Daytona, sandboxIdOrName: string) {
+  try {
+    const sandbox = await daytona.get(sandboxIdOrName)
+    await sandbox.delete(60, true)
+  } catch (error) {
+    if (!(error instanceof DaytonaNotFoundError)) throw error
+  }
+}
 
 export async function createBot(input: CreateBotInput) {
   const { userId } = await auth.protect()
@@ -37,37 +54,71 @@ export async function createBot(input: CreateBotInput) {
     instructions: parsed.data.instructions || null,
   })
 
+  const botId = nanoid()
+  const chatId = nanoid()
+  const sandboxName = `bot-${randomUUID()}`
+  let daytona: Daytona | undefined
+  let sandboxId: string | undefined
+  let bot: Pick<Bot, "name"> | undefined
+
   try {
-    // Generate IDs up front so all three inserts can share one atomic batch.
-    const botId = nanoid()
-    const chatId = nanoid()
-    const [[bot]] = await db.batch([
+    daytona = createDaytona()
+    const sandbox = await daytona.create({ name: sandboxName })
+    sandboxId = sandbox.id
+
+    const [[createdBot]] = await db.batch([
       db
         .insert(bots)
-        .values({ ...values, id: botId })
-        .returning(),
+        .values({ ...values, id: botId, sandboxId })
+        .returning({ name: bots.name }),
       db
         .insert(chats)
         .values({ id: chatId, userId, kind: "direct", name: null }),
       db.insert(chatMembers).values({ chatId, botId }),
     ])
 
-    if (!bot) {
-      return {
-        success: false as const,
-        error: "Could not create your bot. Try again.",
-      }
-    }
-
-    revalidatePath("/")
-    return { success: true as const, bot }
+    if (!createdBot) throw new Error("Bot insert returned no row.")
+    bot = createdBot
   } catch (error) {
     console.error("Failed to create bot:", error)
+
+    if (daytona && (sandboxId || !(error instanceof DaytonaConflictError))) {
+      try {
+        if (sandboxId) {
+          // The database may have committed the batch before the request failed.
+          const [savedBot] = await db
+            .select({ name: bots.name })
+            .from(bots)
+            .where(
+              and(
+                eq(bots.id, botId),
+                eq(bots.userId, userId),
+                eq(bots.sandboxId, sandboxId)
+              )
+            )
+          bot = savedBot
+        }
+
+        if (!bot) await deleteSandbox(daytona, sandboxId ?? sandboxName)
+      } catch (cleanupError) {
+        console.error(
+          "Failed to reconcile bot and sandbox creation:",
+          { botId, sandboxId, sandboxName },
+          cleanupError
+        )
+      }
+    }
+  }
+
+  if (!bot) {
     return {
       success: false as const,
       error: "Could not create your bot. Try again.",
     }
   }
+
+  revalidatePath("/")
+  return { success: true as const, bot }
 }
 
 export async function updateBot(botId: string, input: UpdateBotInput) {
@@ -130,14 +181,29 @@ export async function deleteBot(botId: string) {
   }
 
   try {
+    const ownedBot = and(eq(bots.id, parsedId.data), eq(bots.userId, userId))
+    const [bot] = await db
+      .select({ sandboxId: bots.sandboxId })
+      .from(bots)
+      .where(ownedBot)
+
+    if (!bot) {
+      return {
+        success: false as const,
+        error: "Could not find your bot. Refresh the page and try again.",
+      }
+    }
+
+    if (bot.sandboxId) await deleteSandbox(createDaytona(), bot.sandboxId)
+
     const botChats = db
       .select({ id: chatMembers.chatId })
       .from(chatMembers)
       .innerJoin(bots, eq(chatMembers.botId, bots.id))
-      .where(and(eq(bots.id, parsedId.data), eq(bots.userId, userId)))
+      .where(ownedBot)
 
     // Delete direct chats and the owned bot in one atomic Neon batch.
-    const [, [bot]] = await db.batch([
+    await db.batch([
       db
         .delete(chats)
         .where(
@@ -147,18 +213,8 @@ export async function deleteBot(botId: string) {
             inArray(chats.id, botChats)
           )
         ),
-      db
-        .delete(bots)
-        .where(and(eq(bots.id, parsedId.data), eq(bots.userId, userId)))
-        .returning({ id: bots.id }),
+      db.delete(bots).where(ownedBot),
     ])
-
-    if (!bot) {
-      return {
-        success: false as const,
-        error: "Could not find your bot. Refresh the page and try again.",
-      }
-    }
   } catch (error) {
     console.error("Failed to delete bot:", error)
     return {

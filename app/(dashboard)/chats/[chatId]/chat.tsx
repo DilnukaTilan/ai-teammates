@@ -2,7 +2,8 @@
 
 import { useChat } from "@ai-sdk/react"
 import { TriggerChatTransport } from "@trigger.dev/sdk/chat"
-import { isTextUIPart, type UIMessage } from "ai"
+import { isStaticToolUIPart, isTextUIPart } from "ai"
+import { WrenchIcon } from "lucide-react"
 import { useState } from "react"
 
 import { mintChatAccessToken, startChatSession } from "@/actions/chat"
@@ -12,6 +13,7 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation"
+import { Image } from "@/components/ai-elements/image"
 import {
   Message,
   MessageContent,
@@ -23,6 +25,179 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input"
+import { CodeBlock, CodeBlockContent } from "@/components/ui/code-block"
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace"
+import type { TeammateChatMessage } from "@/trigger/chat"
+
+type MessagePart = TeammateChatMessage["parts"][number]
+type ToolPart = Extract<MessagePart, { type: `tool-${string}` }>
+type VisibleToolPart = Exclude<ToolPart, { type: "tool-view_screen" }>
+
+const toolTitles: Record<VisibleToolPart["type"], string> = {
+  "tool-bash": "Run Bash",
+  "tool-read_file": "Read file",
+  "tool-write_file": "Write file",
+  "tool-list_files": "List files",
+  "tool-mouse_click": "Click",
+  "tool-mouse_move": "Move pointer",
+  "tool-mouse_scroll": "Scroll",
+  "tool-keyboard_type": "Type text",
+  "tool-keyboard_press": "Press key",
+  "tool-show_screen": "Show screen",
+}
+
+const toolStatusLabels: Record<ToolPart["state"], string> = {
+  "input-streaming": "Pending",
+  "input-available": "Running",
+  "approval-requested": "Awaiting approval",
+  "approval-responded": "Responded",
+  "output-available": "Completed",
+  "output-error": "Failed",
+  "output-denied": "Denied",
+}
+
+function formatToolOutput(part: VisibleToolPart) {
+  if (part.state !== "output-available") return
+
+  switch (part.type) {
+    case "tool-bash":
+      return `${part.output.text || "No command output."}${part.output.truncated ? "\n[Output truncated]" : ""}`
+    case "tool-read_file":
+      return [
+        part.output.text || "No text in this range.",
+        part.output.truncated && "[Output truncated]",
+        part.output.nextLine && `Next line: ${part.output.nextLine}`,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    default:
+      return JSON.stringify(part.output, null, 2)
+  }
+}
+
+function ToolCall({ part }: { part: VisibleToolPart }) {
+  const error = part.state === "output-error"
+  const pending = part.state === "input-streaming"
+  const running = part.state === "input-available"
+  const completed = part.state === "output-available"
+  const exitCode =
+    part.type === "tool-bash" && completed ? part.output.exitCode : undefined
+  const failed = error || (exitCode !== undefined && exitCode !== 0)
+
+  const line = (
+    <TraceLine
+      status={
+        failed ? "error" : pending ? "pending" : running ? "running" : undefined
+      }
+    >
+      <TraceIcon>
+        <WrenchIcon />
+      </TraceIcon>
+      <TraceTitle>{toolTitles[part.type]}</TraceTitle>
+      <TraceDescription>
+        {exitCode !== undefined
+          ? `Exit ${exitCode}`
+          : toolStatusLabels[part.state]}
+      </TraceDescription>
+    </TraceLine>
+  )
+
+  if (part.type === "tool-show_screen" && completed) {
+    return (
+      <>
+        {line}
+        <Image
+          alt="Current sandbox desktop"
+          base64={part.output.base64}
+          className="w-full border"
+          mediaType="image/jpeg"
+        />
+      </>
+    )
+  }
+
+  if (!completed && !error) return line
+
+  const input =
+    part.type === "tool-bash"
+      ? part.input?.command
+      : part.input && Object.keys(part.input).length > 0
+        ? JSON.stringify(part.input, null, 2)
+        : undefined
+
+  return (
+    <TraceCollapsible>
+      <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
+      <TraceCollapsibleContent className="flex flex-col gap-2">
+        {input && (
+          <CodeBlock size="sm" aria-label="Tool input">
+            <CodeBlockContent className="max-h-56" wrap>
+              {input}
+            </CodeBlockContent>
+          </CodeBlock>
+        )}
+        <CodeBlock
+          size="sm"
+          aria-label="Tool result"
+          variant={failed ? "destructive" : "default"}
+        >
+          <CodeBlockContent className="max-h-72" wrap>
+            {error ? part.errorText : formatToolOutput(part)}
+          </CodeBlockContent>
+        </CodeBlock>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
+  )
+}
+
+function AssistantMessage({ message }: { message: TeammateChatMessage }) {
+  const blocks: (
+    { type: "text"; text: string } | { type: "tools"; parts: VisibleToolPart[] }
+  )[] = []
+
+  for (const part of message.parts) {
+    const previous = blocks.at(-1)
+    if (isTextUIPart(part) && part.text) {
+      if (previous?.type === "text") previous.text += part.text
+      else blocks.push({ type: "text", text: part.text })
+    } else if (isStaticToolUIPart(part) && part.type !== "tool-view_screen") {
+      if (previous?.type === "tools") previous.parts.push(part)
+      else blocks.push({ type: "tools", parts: [part] })
+    }
+  }
+
+  if (blocks.length === 0) return null
+
+  return (
+    <Message from="assistant" className="min-w-0">
+      <MessageContent className="w-full">
+        {blocks.map((block, index) =>
+          block.type === "text" ? (
+            <MessageResponse key={index}>{block.text}</MessageResponse>
+          ) : (
+            <Trace
+              key={block.parts[0].toolCallId}
+              aria-label="Sandbox activity"
+            >
+              {block.parts.map((part) => (
+                <ToolCall key={part.toolCallId} part={part} />
+              ))}
+            </Trace>
+          )
+        )}
+      </MessageContent>
+    </Message>
+  )
+}
 
 export function Chat({
   chatId,
@@ -30,7 +205,7 @@ export function Chat({
   lastEventId,
 }: {
   chatId: string
-  initialMessages: UIMessage[]
+  initialMessages: TeammateChatMessage[]
   lastEventId?: string
 }) {
   const [transport] = useState(() => {
@@ -45,11 +220,12 @@ export function Chat({
     return transport
   })
 
-  const { messages, sendMessage, status, stop, error } = useChat({
-    id: chatId,
-    messages: initialMessages,
-    transport,
-  })
+  const { messages, sendMessage, status, stop, error } =
+    useChat<TeammateChatMessage>({
+      id: chatId,
+      messages: initialMessages,
+      transport,
+    })
   const isGenerating = status === "submitted" || status === "streaming"
 
   return (
@@ -64,6 +240,10 @@ export function Chat({
             />
           )}
           {messages.map((message) => {
+            if (message.role === "assistant") {
+              return <AssistantMessage key={message.id} message={message} />
+            }
+
             const text = message.parts
               .filter(isTextUIPart)
               .map((part) => part.text)
@@ -72,11 +252,7 @@ export function Chat({
             return text ? (
               <Message key={message.id} from={message.role}>
                 <MessageContent>
-                  {message.role === "assistant" ? (
-                    <MessageResponse>{text}</MessageResponse>
-                  ) : (
-                    <p className="wrap-anywhere whitespace-pre-wrap">{text}</p>
-                  )}
+                  <p className="wrap-anywhere whitespace-pre-wrap">{text}</p>
                 </MessageContent>
               </Message>
             ) : null
