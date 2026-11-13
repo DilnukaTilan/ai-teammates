@@ -7,6 +7,7 @@ import {
 } from "@/components/chat-desktop-panel"
 import { ChatHeader, GroupChatHeader } from "@/components/chat-header"
 import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
+import { getBots } from "@/queries/bot"
 import { getChat } from "@/queries/chats"
 import type { TeammateChatMessage } from "@/trigger/chat"
 
@@ -25,10 +26,10 @@ export default async function Page({
   const bot = chat.members[0]?.bot
   if (chat.kind === "direct" && !bot) notFound()
 
-  const { messages, cursors } = await defaultStorage.load<TeammateChatMessage>({
-    chatId,
-    clientData: undefined,
-  })
+  const [{ messages, cursors }, availableBots] = await Promise.all([
+    defaultStorage.load<TeammateChatMessage>({ chatId, clientData: undefined }),
+    chat.kind === "group" ? getBots() : [],
+  ])
 
   if (chat.kind === "group") {
     const bots = chat.members.map(({ bot: { id, name, avatar, job } }) => ({
@@ -39,10 +40,14 @@ export default async function Page({
     }))
 
     return (
-      <main className="flex h-dvh min-w-0 flex-col">
-        <GroupChatHeader name={chat.name ?? "New chat"} bots={bots} />
+      <main key={chatId} className="flex h-dvh min-w-0 flex-col">
+        <GroupChatHeader
+          chatId={chatId}
+          name={chat.name ?? "New chat"}
+          bots={bots}
+          availableBots={availableBots}
+        />
         <Chat
-          key={chatId}
           chatId={chatId}
           initialMessages={messages}
           lastEventId={cursors?.lastOutEventId}

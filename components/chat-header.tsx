@@ -6,6 +6,7 @@ import { BotDialog } from "@/components/bot-dialog"
 import { ChatAvatar } from "@/components/chat-avatar"
 import { useChatDesktopPanel } from "@/components/chat-desktop-panel"
 import { GroupChatAvatar } from "@/components/group-chat-avatar"
+import { GroupChatDialog } from "@/components/group-chat-dialog"
 import { Button } from "@/components/ui/button"
 import type { ChatBot, EditableBot } from "@/lib/db/schema"
 
@@ -51,17 +52,33 @@ export function ChatHeader({ bot, desktopPanelId }: ChatHeaderProps) {
 }
 
 export function GroupChatHeader({
+  chatId,
   name,
   bots,
+  availableBots,
 }: {
+  chatId: string
   name: string
   bots: ChatBot[]
+  availableBots: ChatBot[]
 }) {
   return (
     <header className={headerClassName}>
-      <h1 className="flex min-w-0 items-center gap-3 pl-3">
-        <GroupChatAvatar bots={bots} />
-        <span className="truncate text-lg font-semibold">{name}</span>
+      <h1 className="min-w-0">
+        <GroupChatDialog
+          group={{ id: chatId, name, botIds: bots.map(({ id }) => id) }}
+          bots={availableBots}
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto max-w-full items-center justify-center gap-3 py-2 pr-4 pl-3"
+            aria-label={`Edit ${name}`}
+          >
+            <GroupChatAvatar bots={bots} />
+            <span className="truncate text-lg font-semibold">{name}</span>
+          </Button>
+        </GroupChatDialog>
       </h1>
     </header>
   )
