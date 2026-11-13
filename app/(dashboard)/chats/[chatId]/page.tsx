@@ -31,10 +31,11 @@ export default async function Page({
   })
 
   if (chat.kind === "group") {
-    const bots = chat.members.map(({ bot: { id, name, avatar } }) => ({
+    const bots = chat.members.map(({ bot: { id, name, avatar, job } }) => ({
       id,
       name,
       avatar,
+      job,
     }))
 
     return (

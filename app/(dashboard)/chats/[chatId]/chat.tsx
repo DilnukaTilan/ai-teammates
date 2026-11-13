@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react"
 import { TriggerChatTransport } from "@trigger.dev/sdk/chat"
 import { isStaticToolUIPart, isTextUIPart } from "ai"
-import { WrenchIcon } from "lucide-react"
+import { ArrowRightIcon, WrenchIcon } from "lucide-react"
 import { useState } from "react"
 
 import { mintChatAccessToken, startChatSession } from "@/actions/chat"
@@ -48,7 +48,12 @@ import type { TeammateChatMessage } from "@/trigger/chat"
 
 type MessagePart = TeammateChatMessage["parts"][number]
 type ToolPart = Extract<MessagePart, { type: `tool-${string}` }>
-type VisibleToolPart = Exclude<ToolPart, { type: "tool-view_screen" }>
+type HandoffPart = Extract<ToolPart, { type: "tool-handoff" }>
+type GroupBot = ChatBot & { job: string }
+type VisibleToolPart = Exclude<
+  ToolPart,
+  { type: "tool-view_screen" | "tool-handoff" }
+>
 
 const toolTitles: Record<VisibleToolPart["type"], string> = {
   "tool-bash": "Run Bash",
@@ -167,15 +172,38 @@ function ToolCall({ part }: { part: VisibleToolPart }) {
   )
 }
 
+function botLabel(name: string, job?: string) {
+  return job ? `${name} (${job})` : name
+}
+
+function BotAttribution({
+  name,
+  avatar,
+  job,
+}: {
+  name: string
+  avatar?: string
+  job?: string
+}) {
+  return (
+    <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+      {avatar && <ChatAvatar seed={avatar} alt="" />}
+      <span className="wrap-anywhere">{botLabel(name, job)}</span>
+    </p>
+  )
+}
+
 function AssistantMessage({
   message,
   groupBots,
 }: {
   message: TeammateChatMessage
-  groupBots?: ChatBot[]
+  groupBots?: GroupBot[]
 }) {
   const blocks: (
-    { type: "text"; text: string } | { type: "tools"; parts: VisibleToolPart[] }
+    | { type: "text"; text: string }
+    | { type: "tools"; parts: VisibleToolPart[] }
+    | { type: "handoff"; part: HandoffPart }
   )[] = []
 
   for (const part of message.parts) {
@@ -183,6 +211,8 @@ function AssistantMessage({
     if (isTextUIPart(part) && part.text) {
       if (previous?.type === "text") previous.text += part.text
       else blocks.push({ type: "text", text: part.text })
+    } else if (part.type === "tool-handoff") {
+      blocks.push({ type: "handoff", part })
     } else if (isStaticToolUIPart(part) && part.type !== "tool-view_screen") {
       if (previous?.type === "tools") previous.parts.push(part)
       else blocks.push({ type: "tools", parts: [part] })
@@ -191,26 +221,69 @@ function AssistantMessage({
 
   if (blocks.length === 0) return null
 
-  const { botName, botAvatar } = message.metadata ?? {}
-  let avatar = botAvatar
-  if (!avatar && botName && groupBots) {
-    const matches = groupBots.filter((bot) => bot.name === botName)
-    if (matches.length === 1) avatar = matches[0].avatar
-  }
+  const { botName, botAvatar, botJob } = message.metadata ?? {}
+  const matches = botName
+    ? groupBots?.filter(
+        (bot) =>
+          bot.name === botName && (!botAvatar || bot.avatar === botAvatar)
+      )
+    : undefined
+  const originalBot = matches?.length === 1 ? matches[0] : undefined
 
   return (
     <Message from="assistant" className="min-w-0">
       <MessageContent className="w-full">
         {botName && (
-          <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            {avatar && <ChatAvatar seed={avatar} alt="" />}
-            {botName}
-          </p>
+          <BotAttribution
+            name={botName}
+            avatar={botAvatar ?? originalBot?.avatar}
+            job={botJob ?? originalBot?.job}
+          />
         )}
-        {blocks.map((block, index) =>
-          block.type === "text" ? (
-            <MessageResponse key={index}>{block.text}</MessageResponse>
-          ) : (
+        {blocks.map((block, index) => {
+          if (block.type === "text") {
+            return <MessageResponse key={index}>{block.text}</MessageResponse>
+          }
+
+          if (block.type === "handoff") {
+            const { part } = block
+            if (part.state === "output-available") {
+              const { botId, botName, botAvatar, botJob } = part.output
+              const job =
+                botJob ?? groupBots?.find((bot) => bot.id === botId)?.job
+              return (
+                <div key={part.toolCallId} className="flex flex-col gap-2">
+                  <TraceLine>
+                    <TraceIcon>
+                      <ArrowRightIcon />
+                    </TraceIcon>
+                    <TraceTitle>
+                      Handed off to {botLabel(botName, job)}
+                    </TraceTitle>
+                  </TraceLine>
+                  <BotAttribution name={botName} avatar={botAvatar} job={job} />
+                </div>
+              )
+            }
+
+            const failed =
+              part.state === "output-error" || part.state === "output-denied"
+            return (
+              <TraceLine
+                key={part.toolCallId}
+                status={failed ? "error" : "running"}
+              >
+                <TraceIcon>
+                  <ArrowRightIcon />
+                </TraceIcon>
+                <TraceTitle>
+                  {failed ? "Handoff failed" : "Handing off"}
+                </TraceTitle>
+              </TraceLine>
+            )
+          }
+
+          return (
             <Trace
               key={block.parts[0].toolCallId}
               aria-label="Sandbox activity"
@@ -220,7 +293,7 @@ function AssistantMessage({
               ))}
             </Trace>
           )
-        )}
+        })}
       </MessageContent>
     </Message>
   )
@@ -235,7 +308,7 @@ export function Chat({
   chatId: string
   initialMessages: TeammateChatMessage[]
   lastEventId?: string
-  groupBots?: ChatBot[]
+  groupBots?: GroupBot[]
 }) {
   const [transport] = useState(() => {
     const transport = new TriggerChatTransport({
@@ -352,7 +425,9 @@ export function Chat({
                           alt=""
                           className="size-7"
                         />
-                        <span className="truncate">{selectedBot.name}</span>
+                        <span className="truncate">
+                          {botLabel(selectedBot.name, selectedBot.job)}
+                        </span>
                       </>
                     )}
                   </PromptInputSelectValue>
@@ -361,6 +436,7 @@ export function Chat({
                   side="top"
                   align="start"
                   alignItemWithTrigger={false}
+                  className="w-max max-w-[min(24rem,calc(100vw-2rem))]"
                 >
                   <SelectGroup>
                     {groupBots.map((bot) => (
@@ -368,9 +444,12 @@ export function Chat({
                         key={bot.id}
                         value={bot.id}
                         label={bot.name}
+                        className="[&>span:first-child]:min-w-0 [&>span:first-child]:shrink"
                       >
                         <ChatAvatar seed={bot.avatar} alt="" />
-                        <span className="truncate">{bot.name}</span>
+                        <span className="wrap-anywhere whitespace-normal">
+                          {botLabel(bot.name, bot.job)}
+                        </span>
                       </PromptInputSelectItem>
                     ))}
                   </SelectGroup>
