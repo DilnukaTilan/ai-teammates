@@ -1,11 +1,18 @@
 import { defaultStorage } from "@trigger.dev/sdk/ai"
 import { notFound } from "next/navigation"
 
+import {
+  ChatDesktopPanel,
+  ChatDesktopPanelProvider,
+} from "@/components/chat-desktop-panel"
 import { ChatHeader } from "@/components/chat-header"
+import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { getChat } from "@/queries/chats"
 import type { TeammateChatMessage } from "@/trigger/chat"
 
 import { Chat } from "./chat"
+
+const desktopPanelId = "chat-desktop-panel"
 
 export default async function Page({
   params,
@@ -26,14 +33,34 @@ export default async function Page({
   })
 
   return (
-    <main className="flex h-dvh flex-col">
-      <ChatHeader bot={bot} />
-      <Chat
-        key={chatId}
-        chatId={chatId}
-        initialMessages={messages}
-        lastEventId={cursors?.lastOutEventId}
-      />
+    <main className="h-dvh">
+      <ChatDesktopPanelProvider key={chatId}>
+        <ResizablePanelGroup orientation="horizontal">
+          <ResizablePanel id="chat-panel" className="flex min-w-0 flex-col">
+            <ChatHeader
+              bot={{
+                id: bot.id,
+                name: bot.name,
+                avatar: bot.avatar,
+                job: bot.job,
+                instructions: bot.instructions,
+              }}
+              desktopPanelId={desktopPanelId}
+            />
+            <Chat
+              key={chatId}
+              chatId={chatId}
+              initialMessages={messages}
+              lastEventId={cursors?.lastOutEventId}
+            />
+          </ResizablePanel>
+          <ChatDesktopPanel
+            chatId={chatId}
+            panelId={desktopPanelId}
+            teammateName={bot.name}
+          />
+        </ResizablePanelGroup>
+      </ChatDesktopPanelProvider>
     </main>
   )
 }
