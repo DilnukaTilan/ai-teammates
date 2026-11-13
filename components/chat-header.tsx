@@ -5,8 +5,12 @@ import { MonitorIcon } from "lucide-react"
 import { BotDialog } from "@/components/bot-dialog"
 import { ChatAvatar } from "@/components/chat-avatar"
 import { useChatDesktopPanel } from "@/components/chat-desktop-panel"
+import { GroupChatAvatar } from "@/components/group-chat-avatar"
 import { Button } from "@/components/ui/button"
-import type { EditableBot } from "@/lib/db/schema"
+import type { ChatBot, EditableBot } from "@/lib/db/schema"
+
+const headerClassName =
+  "flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-background px-4 text-foreground sm:px-6"
 
 type ChatHeaderProps = {
   bot: EditableBot
@@ -17,7 +21,7 @@ export function ChatHeader({ bot, desktopPanelId }: ChatHeaderProps) {
   const { open, toggle } = useChatDesktopPanel()
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-background px-4 text-foreground sm:px-6">
+    <header className={headerClassName}>
       <h1 className="min-w-0">
         <BotDialog bot={bot}>
           <Button
@@ -42,6 +46,23 @@ export function ChatHeader({ bot, desktopPanelId }: ChatHeaderProps) {
       >
         <MonitorIcon aria-hidden="true" data-icon="inline-start" />
       </Button>
+    </header>
+  )
+}
+
+export function GroupChatHeader({
+  name,
+  bots,
+}: {
+  name: string
+  bots: ChatBot[]
+}) {
+  return (
+    <header className={headerClassName}>
+      <h1 className="flex min-w-0 items-center gap-3 pl-3">
+        <GroupChatAvatar bots={bots} />
+        <span className="truncate text-lg font-semibold">{name}</span>
+      </h1>
     </header>
   )
 }

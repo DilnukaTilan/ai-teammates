@@ -113,9 +113,26 @@ export const createBotSchema = insertBotSchema
 
 export const updateBotSchema = createBotSchema
 
+export const createGroupChatSchema = createInsertSchema(chats, {
+  // The group form requires a name, even though direct chats store null.
+  name: z.string().trim().min(1, "Give your group a name.").max(100),
+})
+  .pick({ name: true })
+  .extend({
+    botIds: z
+      .array(z.string().min(1).max(100))
+      .min(2, "Choose at least two bots.")
+      .refine(
+        (ids) => new Set(ids).size === ids.length,
+        "Choose distinct bots."
+      ),
+  })
+
 export type CreateBotInput = z.infer<typeof createBotSchema>
+export type CreateGroupChatInput = z.infer<typeof createGroupChatSchema>
 export type UpdateBotInput = z.infer<typeof updateBotSchema>
 export type Bot = typeof bots.$inferSelect
+export type ChatBot = Pick<Bot, "id" | "name" | "avatar">
 export type EditableBot = Pick<Bot, "id" | keyof UpdateBotInput>
 export type NewBot = typeof bots.$inferInsert
 export type Chat = typeof chats.$inferSelect

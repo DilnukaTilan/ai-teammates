@@ -17,10 +17,11 @@ export async function connectChatDesktop(
 
   // getChat authenticates the request and checks chat ownership.
   const chat = await getChat(chatId)
-  const bot = chat?.members[0]?.bot
-  if (!chat || !bot || bot.userId !== chat.userId) {
+  if (chat?.kind !== "direct") {
     return { error: "Desktop unavailable." }
   }
+  const bot = chat.members[0]?.bot
+  if (!bot) return { error: "Desktop unavailable." }
   if (!bot.sandboxId) {
     return { error: "This teammate has no desktop sandbox." }
   }

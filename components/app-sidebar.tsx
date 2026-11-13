@@ -9,6 +9,8 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
 
 import { BotDialog } from "@/components/bot-dialog"
 import { ChatAvatar } from "@/components/chat-avatar"
+import { GroupChatAvatar } from "@/components/group-chat-avatar"
+import { GroupChatDialog } from "@/components/group-chat-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -40,9 +42,11 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
-import type { SidebarChat } from "@/queries/bot"
+import type { ChatBot } from "@/lib/db/schema"
+import type { SidebarChat } from "@/queries/chats"
 
 type AppSidebarProps = {
+  bots: ChatBot[]
   chats: SidebarChat[]
   referenceDate: Date
 }
@@ -64,15 +68,14 @@ function ChatRow({
 }) {
   return (
     <>
-      <ChatAvatar
-        seed={chat.bot?.avatar ?? chat.id}
-        className="group-data-[collapsible=icon]:size-8"
-      />
+      {chat.kind === "group" ? (
+        <GroupChatAvatar bots={chat.bots} />
+      ) : (
+        <ChatAvatar seed={chat.bots[0]?.avatar ?? chat.id} alt="" />
+      )}
       <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate font-medium">
-            {chat.bot?.name ?? "New chat"}
-          </span>
+          <span className="truncate font-medium">{chat.title}</span>
           <time
             dateTime={chat.lastMessageAt.toISOString()}
             className="ml-auto shrink-0 text-xs text-muted-foreground"
@@ -88,12 +91,13 @@ function ChatRow({
   )
 }
 
-export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
+export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
   const { chatId } = useParams<{ chatId?: string }>()
   const router = useRouter()
   const { state, isMobile } = useSidebar()
   const iconOnly = state === "collapsed" && !isMobile
   const [botDialogOpen, setBotDialogOpen] = useState(false)
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const createButtonRef = useRef<HTMLButtonElement>(null)
   const searchButtonRef = useRef<HTMLButtonElement>(null)
@@ -112,7 +116,8 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
         event.isComposing ||
         event.altKey ||
         event.shiftKey ||
-        botDialogOpen
+        botDialogOpen ||
+        groupDialogOpen
       ) {
         return
       }
@@ -125,7 +130,7 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
 
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [botDialogOpen])
+  }, [botDialogOpen, groupDialogOpen])
 
   return (
     <>
@@ -152,7 +157,7 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
                     <PlusIcon aria-hidden="true" />
                     Create new bot
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setGroupDialogOpen(true)}>
                     <UsersIcon aria-hidden="true" />
                     Create group chat
                   </DropdownMenuItem>
@@ -164,6 +169,12 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
             avatarSeed={avatarSeed}
             open={botDialogOpen}
             onOpenChange={setBotDialogOpen}
+            finalFocus={createButtonRef}
+          />
+          <GroupChatDialog
+            bots={bots}
+            open={groupDialogOpen}
+            onOpenChange={setGroupDialogOpen}
             finalFocus={createButtonRef}
           />
           <Button
@@ -201,8 +212,8 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
                       aria-current={chat.id === chatId ? "page" : undefined}
                       size="lg"
                       className="group-data-[collapsible=icon]:justify-center"
-                      aria-label={chat.bot?.name ?? "New chat"}
-                      tooltip={chat.bot?.name ?? "New chat"}
+                      aria-label={chat.title}
+                      tooltip={chat.title}
                     >
                       <ChatRow chat={chat} referenceDate={referenceDate} />
                     </SidebarMenuButton>
@@ -277,7 +288,7 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
         open={searchOpen}
         onOpenChange={setSearchOpen}
         title="Search chats"
-        description="Search your chats by bot name or message preview."
+        description="Search your chats by name or message preview."
         showCloseButton
         finalFocus={searchButtonRef}
         className="top-[min(20svh,8rem)] sm:max-w-lg"
@@ -295,10 +306,7 @@ export function AppSidebar({ chats, referenceDate }: AppSidebarProps) {
                 <CommandItem
                   key={chat.id}
                   value={chat.id}
-                  keywords={[
-                    chat.bot?.name ?? "New chat",
-                    chat.lastMessagePreview ?? "",
-                  ]}
+                  keywords={[chat.title, chat.lastMessagePreview ?? ""]}
                   onSelect={() => {
                     setSearchOpen(false)
                     router.push(`/chats/${encodeURIComponent(chat.id)}`)

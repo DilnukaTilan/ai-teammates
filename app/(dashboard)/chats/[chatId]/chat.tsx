@@ -22,10 +22,17 @@ import {
 import {
   PromptInput,
   PromptInputFooter,
+  PromptInputSelect,
+  PromptInputSelectContent,
+  PromptInputSelectItem,
+  PromptInputSelectTrigger,
+  PromptInputSelectValue,
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input"
+import { ChatAvatar } from "@/components/chat-avatar"
 import { CodeBlock, CodeBlockContent } from "@/components/ui/code-block"
+import { SelectGroup } from "@/components/ui/select"
 import {
   Trace,
   TraceCollapsible,
@@ -36,6 +43,7 @@ import {
   TraceLine,
   TraceTitle,
 } from "@/components/ui/trace"
+import type { ChatBot } from "@/lib/db/schema"
 import type { TeammateChatMessage } from "@/trigger/chat"
 
 type MessagePart = TeammateChatMessage["parts"][number]
@@ -180,6 +188,11 @@ function AssistantMessage({ message }: { message: TeammateChatMessage }) {
   return (
     <Message from="assistant" className="min-w-0">
       <MessageContent className="w-full">
+        {message.metadata?.botName && (
+          <p className="text-sm font-medium text-muted-foreground">
+            {message.metadata.botName}
+          </p>
+        )}
         {blocks.map((block, index) =>
           block.type === "text" ? (
             <MessageResponse key={index}>{block.text}</MessageResponse>
@@ -203,10 +216,12 @@ export function Chat({
   chatId,
   initialMessages,
   lastEventId,
+  groupBots,
 }: {
   chatId: string
   initialMessages: TeammateChatMessage[]
   lastEventId?: string
+  groupBots?: ChatBot[]
 }) {
   const [transport] = useState(() => {
     const transport = new TriggerChatTransport({
@@ -227,6 +242,10 @@ export function Chat({
       transport,
     })
   const isGenerating = status === "submitted" || status === "streaming"
+  const [selectedBotId, setSelectedBotId] = useState<string | null>(null)
+  const selectedBot =
+    groupBots?.find((bot) => bot.id === selectedBotId) ?? groupBots?.[0]
+  const canSend = !groupBots || !!selectedBot
 
   return (
     <>
@@ -236,7 +255,11 @@ export function Chat({
             <ConversationEmptyState
               className="flex-1"
               title="Start a conversation"
-              description="Send a message to your teammate."
+              description={
+                groupBots
+                  ? "Pick a bot to reply to your message."
+                  : "Send a message to your teammate."
+              }
             />
           )}
           {messages.map((message) => {
@@ -271,20 +294,78 @@ export function Chat({
           maxFiles={0}
           onSubmit={({ text }) => {
             const message = text.trim()
-            if (message && !isGenerating) {
-              void sendMessage({ text: message })
+            if (message && !isGenerating && canSend) {
+              void sendMessage(
+                { text: message },
+                selectedBot
+                  ? { metadata: { botId: selectedBot.id } }
+                  : undefined
+              )
             }
           }}
         >
           <PromptInputTextarea
             aria-label="Message"
-            placeholder="Message your teammate…"
-            disabled={isGenerating}
+            placeholder={
+              groupBots ? "Message the group…" : "Message your teammate…"
+            }
+            disabled={isGenerating || !canSend}
           />
-          <PromptInputFooter className="justify-end">
+          <PromptInputFooter>
+            {groupBots && (
+              <PromptInputSelect
+                value={selectedBot?.id ?? null}
+                onValueChange={(value) => {
+                  if (typeof value === "string") setSelectedBotId(value)
+                }}
+                disabled={isGenerating || !canSend}
+              >
+                <PromptInputSelectTrigger
+                  aria-label="Bot to reply"
+                  className="max-w-[75%] min-w-0"
+                >
+                  <PromptInputSelectValue placeholder="No bots available">
+                    {selectedBot && (
+                      <>
+                        <ChatAvatar
+                          seed={selectedBot.avatar}
+                          alt=""
+                          className="size-4"
+                        />
+                        <span className="truncate">{selectedBot.name}</span>
+                      </>
+                    )}
+                  </PromptInputSelectValue>
+                </PromptInputSelectTrigger>
+                <PromptInputSelectContent
+                  side="top"
+                  align="start"
+                  alignItemWithTrigger={false}
+                >
+                  <SelectGroup>
+                    {groupBots.map((bot) => (
+                      <PromptInputSelectItem
+                        key={bot.id}
+                        value={bot.id}
+                        label={bot.name}
+                      >
+                        <ChatAvatar
+                          seed={bot.avatar}
+                          alt=""
+                          className="size-4"
+                        />
+                        <span className="truncate">{bot.name}</span>
+                      </PromptInputSelectItem>
+                    ))}
+                  </SelectGroup>
+                </PromptInputSelectContent>
+              </PromptInputSelect>
+            )}
             <PromptInputSubmit
+              className="ml-auto"
               status={isGenerating ? status : "ready"}
               onStop={stop}
+              disabled={!canSend}
             />
           </PromptInputFooter>
         </PromptInput>

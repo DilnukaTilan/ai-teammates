@@ -12,12 +12,13 @@ import {
   SidebarMenuSkeleton,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { getChats } from "@/queries/bot"
+import { getBots } from "@/queries/bot"
+import { getChats } from "@/queries/chats"
 
 async function SidebarWithChats() {
-  const chats = await getChats()
+  const [chats, bots] = await Promise.all([getChats(), getBots()])
 
-  return <AppSidebar chats={chats} referenceDate={new Date()} />
+  return <AppSidebar bots={bots} chats={chats} referenceDate={new Date()} />
 }
 
 function SidebarLoading() {

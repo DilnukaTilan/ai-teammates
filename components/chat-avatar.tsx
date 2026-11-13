@@ -8,12 +8,14 @@ const gazeStyle = new Style(gaze)
 
 type ChatAvatarProps = {
   seed: string
+  alt?: string
   animated?: boolean
   className?: string
 }
 
 export function ChatAvatar({
   seed,
+  alt = "Chat avatar",
   animated = false,
   className,
 }: ChatAvatarProps) {
@@ -26,7 +28,7 @@ export function ChatAvatar({
   return (
     <Image
       src={avatar.toDataUri()}
-      alt="Chat avatar"
+      alt={alt}
       width={32}
       height={32}
       className={cn("size-8 shrink-0", className)}
