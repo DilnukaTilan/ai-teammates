@@ -13,14 +13,18 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export default async function Page() {
   await auth.protect()
   const avatarSeed = randomUUID()
 
   return (
-    <main className="flex min-h-svh p-6">
-      <Empty>
+    <main className="flex min-h-svh flex-col">
+      <header className="flex h-16 shrink-0 items-center border-b px-4 sm:px-6 md:hidden">
+        <SidebarTrigger className="size-11" />
+      </header>
+      <Empty className="m-6 w-auto">
         <EmptyHeader>
           <EmptyMedia>
             <ChatAvatar seed={avatarSeed} className="size-12" />

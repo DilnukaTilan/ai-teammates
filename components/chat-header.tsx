@@ -8,10 +8,12 @@ import { useChatDesktopPanel } from "@/components/chat-desktop-panel"
 import { GroupChatAvatar } from "@/components/group-chat-avatar"
 import { GroupChatDialog } from "@/components/group-chat-dialog"
 import { Button } from "@/components/ui/button"
+import { DialogTrigger } from "@/components/ui/dialog"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 import type { ChatBot, EditableBot } from "@/lib/db/schema"
 
 const headerClassName =
-  "flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-background px-4 text-foreground sm:px-6"
+  "flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 text-foreground sm:px-6 md:gap-4"
 
 type ChatHeaderProps = {
   bot: EditableBot
@@ -19,10 +21,27 @@ type ChatHeaderProps = {
 }
 
 export function ChatHeader({ bot, desktopPanelId }: ChatHeaderProps) {
-  const { open, toggle } = useChatDesktopPanel()
+  const { open, isMobile, fullscreenDialog, toggle } = useChatDesktopPanel()
+  const desktopButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-lg"
+      className="ml-auto max-md:size-11"
+      aria-label="Desktop"
+      {...(!isMobile && {
+        "aria-expanded": open,
+        "aria-controls": open ? desktopPanelId : undefined,
+        onClick: toggle,
+      })}
+    >
+      <MonitorIcon aria-hidden="true" data-icon="inline-start" />
+    </Button>
+  )
 
   return (
     <header className={headerClassName}>
+      <SidebarTrigger className="size-11 md:hidden" />
       <h1 className="min-w-0">
         <BotDialog bot={bot}>
           <Button
@@ -36,17 +55,11 @@ export function ChatHeader({ bot, desktopPanelId }: ChatHeaderProps) {
           </Button>
         </BotDialog>
       </h1>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-lg"
-        aria-label="Desktop"
-        aria-expanded={open}
-        aria-controls={open ? desktopPanelId : undefined}
-        onClick={toggle}
-      >
-        <MonitorIcon aria-hidden="true" data-icon="inline-start" />
-      </Button>
+      {isMobile ? (
+        <DialogTrigger handle={fullscreenDialog} render={desktopButton} />
+      ) : (
+        desktopButton
+      )}
     </header>
   )
 }
@@ -64,6 +77,7 @@ export function GroupChatHeader({
 }) {
   return (
     <header className={headerClassName}>
+      <SidebarTrigger className="size-11 md:hidden" />
       <h1 className="min-w-0">
         <GroupChatDialog
           group={{ id: chatId, name, botIds: bots.map(({ id }) => id) }}

@@ -256,14 +256,17 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { isMobile, open, openMobile, toggleSidebar } = useSidebar()
 
   return (
     <Button
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
+      type="button"
       variant="ghost"
       size="icon-sm"
+      aria-expanded={isMobile ? openMobile : open}
+      aria-haspopup={isMobile ? "dialog" : undefined}
       className={cn(className)}
       onClick={(event) => {
         onClick?.(event)
@@ -271,7 +274,7 @@ function SidebarTrigger({
       }}
       {...props}
     >
-      <PanelLeftIcon />
+      <PanelLeftIcon aria-hidden="true" />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )

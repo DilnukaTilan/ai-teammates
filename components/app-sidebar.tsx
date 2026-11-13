@@ -2,7 +2,7 @@
 
 import { UserButton } from "@clerk/nextjs"
 import { formatDistanceStrict } from "date-fns"
-import { PlusIcon, SearchIcon, UsersIcon } from "lucide-react"
+import { PlusIcon, SearchIcon, UsersIcon, XIcon } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Kbd } from "@/components/ui/kbd"
+import { SheetClose } from "@/components/ui/sheet"
 import {
   Sidebar,
   SidebarContent,
@@ -94,7 +95,7 @@ function ChatRow({
 export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
   const { chatId } = useParams<{ chatId?: string }>()
   const router = useRouter()
-  const { state, isMobile } = useSidebar()
+  const { state, isMobile, setOpenMobile } = useSidebar()
   const iconOnly = state === "collapsed" && !isMobile
   const [botDialogOpen, setBotDialogOpen] = useState(false)
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
@@ -136,7 +137,22 @@ export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
     <>
       <Sidebar collapsible="icon">
         <SidebarHeader>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end">
+            {isMobile && (
+              <SheetClose
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="mr-auto size-11"
+                    aria-label="Close sidebar"
+                  />
+                }
+              >
+                <XIcon aria-hidden="true" />
+              </SheetClose>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -206,7 +222,10 @@ export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
                   <SidebarMenuItem key={chat.id}>
                     <SidebarMenuButton
                       render={
-                        <Link href={`/chats/${encodeURIComponent(chat.id)}`} />
+                        <Link
+                          href={`/chats/${encodeURIComponent(chat.id)}`}
+                          onNavigate={() => setOpenMobile(false)}
+                        />
                       }
                       isActive={chat.id === chatId}
                       aria-current={chat.id === chatId ? "page" : undefined}
@@ -282,7 +301,7 @@ export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
-        <SidebarRail />
+        {!isMobile && <SidebarRail />}
       </Sidebar>
       <CommandDialog
         open={searchOpen}
@@ -309,6 +328,7 @@ export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
                   keywords={[chat.title, chat.lastMessagePreview ?? ""]}
                   onSelect={() => {
                     setSearchOpen(false)
+                    setOpenMobile(false)
                     router.push(`/chats/${encodeURIComponent(chat.id)}`)
                   }}
                   className="[&>svg:last-child]:hidden"

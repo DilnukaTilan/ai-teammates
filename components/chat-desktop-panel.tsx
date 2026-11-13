@@ -1,5 +1,6 @@
 "use client"
 
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import type RFB from "@novnc/novnc"
 import { RefreshCwIcon } from "lucide-react"
 import {
@@ -23,10 +24,14 @@ import {
 } from "@/components/ui/dialog"
 import { ResizableHandle, ResizablePanel } from "@/components/ui/resizable"
 import { Spinner } from "@/components/ui/spinner"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 const ChatDesktopPanelContext = createContext<{
   open: boolean
   hasOpened: boolean
+  isMobile: boolean
+  fullscreenDialog: ReturnType<typeof DialogPrimitive.createHandle>
+  startDesktop: () => void
   toggle: () => void
 } | null>(null)
 
@@ -38,12 +43,20 @@ export function ChatDesktopPanelProvider({
   const [visibility, setVisibility] = useState<"idle" | "open" | "closed">(
     "idle"
   )
+  const [fullscreenDialog] = useState(() => DialogPrimitive.createHandle())
+  const isMobile = useIsMobile()
 
   return (
     <ChatDesktopPanelContext
       value={{
-        open: visibility === "open",
+        open: visibility === "open" && !isMobile,
         hasOpened: visibility !== "idle",
+        isMobile,
+        fullscreenDialog,
+        startDesktop: () =>
+          setVisibility((previous) =>
+            previous === "idle" ? "closed" : previous
+          ),
         toggle: () =>
           setVisibility((previous) =>
             previous === "open" ? "closed" : "open"
@@ -79,7 +92,8 @@ export function ChatDesktopPanel({
   panelId: string
   teammateName: string
 }) {
-  const { open, hasOpened } = useChatDesktopPanel()
+  const { open, hasOpened, fullscreenDialog, startDesktop } =
+    useChatDesktopPanel()
   const [fullscreen, setFullscreen] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [status, setStatus] = useState<DesktopStatus>({ state: "connecting" })
@@ -195,7 +209,7 @@ export function ChatDesktopPanel({
 
   return (
     <Dialog
-      open={fullscreen}
+      handle={fullscreenDialog}
       disablePointerDismissal
       onOpenChange={(next, details) => {
         if (!next && details.reason !== "close-press") {
@@ -203,6 +217,7 @@ export function ChatDesktopPanel({
           return
         }
 
+        if (next) startDesktop()
         interactiveRef.current = next
         const client = clientRef.current
         if (client) {
