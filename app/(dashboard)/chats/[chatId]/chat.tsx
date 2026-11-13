@@ -167,7 +167,13 @@ function ToolCall({ part }: { part: VisibleToolPart }) {
   )
 }
 
-function AssistantMessage({ message }: { message: TeammateChatMessage }) {
+function AssistantMessage({
+  message,
+  groupBots,
+}: {
+  message: TeammateChatMessage
+  groupBots?: ChatBot[]
+}) {
   const blocks: (
     { type: "text"; text: string } | { type: "tools"; parts: VisibleToolPart[] }
   )[] = []
@@ -185,12 +191,20 @@ function AssistantMessage({ message }: { message: TeammateChatMessage }) {
 
   if (blocks.length === 0) return null
 
+  const { botName, botAvatar } = message.metadata ?? {}
+  let avatar = botAvatar
+  if (!avatar && botName && groupBots) {
+    const matches = groupBots.filter((bot) => bot.name === botName)
+    if (matches.length === 1) avatar = matches[0].avatar
+  }
+
   return (
     <Message from="assistant" className="min-w-0">
       <MessageContent className="w-full">
-        {message.metadata?.botName && (
-          <p className="text-sm font-medium text-muted-foreground">
-            {message.metadata.botName}
+        {botName && (
+          <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            {avatar && <ChatAvatar seed={avatar} alt="" />}
+            {botName}
           </p>
         )}
         {blocks.map((block, index) =>
@@ -264,7 +278,13 @@ export function Chat({
           )}
           {messages.map((message) => {
             if (message.role === "assistant") {
-              return <AssistantMessage key={message.id} message={message} />
+              return (
+                <AssistantMessage
+                  key={message.id}
+                  message={message}
+                  groupBots={groupBots}
+                />
+              )
             }
 
             const text = message.parts
@@ -322,7 +342,7 @@ export function Chat({
               >
                 <PromptInputSelectTrigger
                   aria-label="Bot to reply"
-                  className="max-w-[75%] min-w-0"
+                  className="max-w-[75%] min-w-0 py-1 data-[size=default]:h-10"
                 >
                   <PromptInputSelectValue placeholder="No bots available">
                     {selectedBot && (
@@ -330,7 +350,7 @@ export function Chat({
                         <ChatAvatar
                           seed={selectedBot.avatar}
                           alt=""
-                          className="size-4"
+                          className="size-7"
                         />
                         <span className="truncate">{selectedBot.name}</span>
                       </>
@@ -349,11 +369,7 @@ export function Chat({
                         value={bot.id}
                         label={bot.name}
                       >
-                        <ChatAvatar
-                          seed={bot.avatar}
-                          alt=""
-                          className="size-4"
-                        />
+                        <ChatAvatar seed={bot.avatar} alt="" />
                         <span className="truncate">{bot.name}</span>
                       </PromptInputSelectItem>
                     ))}

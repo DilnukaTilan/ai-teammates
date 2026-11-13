@@ -19,7 +19,7 @@ const session = chat.local<{ chatId: string }>({ id: "teammate-session" })
 const sandboxTools = createSandboxTools()
 
 export type TeammateChatMessage = UIMessage<
-  { botName: string },
+  { botName: string; botAvatar?: string },
   UIDataTypes,
   InferUITools<typeof sandboxTools>
 >
@@ -62,6 +62,7 @@ export const teammateChat = chat.withUIMessage<TeammateChatMessage>().agent({
       .select({
         kind: chats.kind,
         name: bots.name,
+        avatar: bots.avatar,
         job: bots.job,
         instructions: bots.instructions,
         sandboxId: bots.sandboxId,
@@ -90,7 +91,9 @@ export const teammateChat = chat.withUIMessage<TeammateChatMessage>().agent({
     if (bot.kind === "group") {
       chat.setUIMessageStreamOptions({
         messageMetadata: ({ part }) =>
-          part.type === "start" ? { botName: bot.name } : undefined,
+          part.type === "start"
+            ? { botName: bot.name, botAvatar: bot.avatar }
+            : undefined,
       })
     }
 
