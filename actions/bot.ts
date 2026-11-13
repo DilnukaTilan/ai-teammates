@@ -13,6 +13,7 @@ import { redirect } from "next/navigation"
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
 
+import { botMemoryPath } from "@/lib/bot-memory"
 import { createDaytona } from "@/lib/daytona"
 import { db } from "@/lib/db"
 import {
@@ -65,6 +66,15 @@ export async function createBot(input: CreateBotInput) {
     daytona = createDaytona()
     const sandbox = await daytona.create({ name: sandboxName })
     sandboxId = sandbox.id
+    const memory = await sandbox.process.executeCommand(
+      `: > ${botMemoryPath}`,
+      undefined,
+      undefined,
+      15
+    )
+    if (memory.exitCode !== 0) {
+      throw new Error("Could not initialize bot memory.")
+    }
 
     const [[createdBot]] = await db.batch([
       db

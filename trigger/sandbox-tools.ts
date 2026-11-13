@@ -1,8 +1,8 @@
-import { SandboxState, type Sandbox } from "@daytona/sdk"
+import type { Sandbox } from "@daytona/sdk"
 import { tool } from "ai"
 import { z } from "zod"
 
-import { createDaytona } from "../lib/daytona"
+import { getStartedSandbox } from "../lib/daytona"
 
 const path = z.string().min(1).max(4096)
 const coordinates = {
@@ -30,23 +30,7 @@ export function createSandboxTools(sandboxId?: string) {
 
   async function startSandbox() {
     if (!sandboxId) throw new SandboxToolError("This bot has no sandbox.")
-
-    const daytona = createDaytona(30_000)
-    const sandbox = await daytona.get(sandboxId)
-
-    switch (sandbox.state) {
-      case SandboxState.STARTED:
-        break
-      case SandboxState.STOPPED:
-      case SandboxState.PAUSED:
-      case SandboxState.ARCHIVED:
-        await sandbox.start()
-        break
-      default:
-        await sandbox.waitUntilStarted()
-    }
-
-    return sandbox
+    return getStartedSandbox(sandboxId)
   }
 
   function getSandbox() {
