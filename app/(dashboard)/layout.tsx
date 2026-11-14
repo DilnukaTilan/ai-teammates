@@ -12,12 +12,26 @@ import {
   SidebarMenuSkeleton,
   SidebarProvider,
 } from "@/components/ui/sidebar"
+import { isDatabaseConnectTimeout } from "@/lib/db/read-retry"
 import { getBots } from "@/queries/bot"
 import { getChats } from "@/queries/chats"
 
-async function SidebarWithChats() {
-  const [chats, bots] = await Promise.all([getChats(), getBots()])
+import { SidebarUnavailable } from "./sidebar-unavailable"
 
+async function SidebarWithChats() {
+  const sidebarData = await Promise.all([getChats(), getBots()]).catch(
+    (error: unknown) => {
+      if (!isDatabaseConnectTimeout(error)) throw error
+      console.warn(
+        "Could not load the sidebar after a Neon connection timeout."
+      )
+      return null
+    }
+  )
+
+  if (!sidebarData) return <SidebarUnavailable />
+
+  const [chats, bots] = sidebarData
   return <AppSidebar bots={bots} chats={chats} referenceDate={new Date()} />
 }
 

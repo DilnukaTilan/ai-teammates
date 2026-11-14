@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server"
 import { paidPlan, paidPlanRequired } from "@/lib/billing"
 import { getPaidBillingPeriod } from "@/lib/billing-subscription"
+import { configureDesktopBrowser } from "@/lib/daytona-browser"
 import {
   assertSandboxSessionTime,
   openSandboxSession,
@@ -45,6 +46,7 @@ export async function connectChatDesktop(
     )
     assertSandboxSessionTime(endsAt, 30)
 
+    await configureDesktopBrowser(sandbox)
     const vnc = await sandbox.computerUse.getProcessStatus("novnc")
     if (!vnc.running) await sandbox.computerUse.start()
 

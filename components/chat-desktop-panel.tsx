@@ -123,12 +123,19 @@ export function ChatDesktopPanel({
     let client: RFB | undefined
     let timeout: ReturnType<typeof setTimeout> | undefined
 
+    function releaseClient() {
+      const current = client
+      client = undefined
+      if (clientRef.current === current) clientRef.current = null
+      return current
+    }
+
     function fail(message: string) {
       if (!active || failed) return
 
       failed = true
       clearTimeout(timeout)
-      client?.disconnect()
+      releaseClient()?.disconnect()
       setStatus({ state: "error", message })
     }
 
@@ -176,7 +183,11 @@ export function ChatDesktopPanel({
           clearTimeout(timeout)
           setStatus({ state: "connected" })
         })
-        client.addEventListener("disconnect", () => fail(reconnectMessage))
+        client.addEventListener("disconnect", () => {
+          // noVNC has already closed the connection when this event fires.
+          releaseClient()
+          fail(reconnectMessage)
+        })
         client.addEventListener("credentialsrequired", () =>
           fail("The desktop requires VNC credentials.")
         )
@@ -190,8 +201,7 @@ export function ChatDesktopPanel({
     return () => {
       active = false
       clearTimeout(timeout)
-      client?.disconnect()
-      clientRef.current = null
+      releaseClient()?.disconnect()
     }
   }, [attempt, canUsePaidPlan, chatId, hasOpened, showUpgrade, showUsageLimit])
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +34,7 @@ import {
   VenusIcon,
 } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
-import { createContext, useCallback, useContext, useMemo } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 interface VoiceSelectorContextValue {
   value: string | undefined;
@@ -69,6 +70,7 @@ export const VoiceSelector = ({
   open: openProp,
   defaultOpen = false,
   onOpenChange,
+  handle: handleProp,
   children,
   ...props
 }: VoiceSelectorProps) => {
@@ -78,11 +80,27 @@ export const VoiceSelector = ({
     prop: valueProp,
   });
 
-  const [open, setOpen] = useControllableState({
-    defaultProp: defaultOpen,
-    onChange: onOpenChange,
-    prop: openProp,
-  });
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const [internalHandle] = useState(() => DialogPrimitive.createHandle());
+  const open = openProp ?? internalOpen;
+  const handle = handleProp ?? internalHandle;
+  const setOpen = useCallback(
+    (nextOpen: boolean) => {
+      if (nextOpen === open) return;
+      if (nextOpen) handle.open(null);
+      else handle.close();
+    },
+    [handle, open]
+  );
+  const handleOpenChange: NonNullable<VoiceSelectorProps["onOpenChange"]> = (
+    nextOpen,
+    eventDetails
+  ) => {
+    onOpenChange?.(nextOpen, eventDetails);
+    if (!eventDetails.isCanceled && openProp === undefined) {
+      setInternalOpen(nextOpen);
+    }
+  };
 
   const voiceSelectorContext = useMemo(
     () => ({ open, setOpen, setValue, value }),
@@ -91,7 +109,12 @@ export const VoiceSelector = ({
 
   return (
     <VoiceSelectorContext.Provider value={voiceSelectorContext}>
-      <Dialog onOpenChange={setOpen} open={open} {...props}>
+      <Dialog
+        handle={handle}
+        onOpenChange={handleOpenChange}
+        open={open}
+        {...props}
+      >
         {children}
       </Dialog>
     </VoiceSelectorContext.Provider>

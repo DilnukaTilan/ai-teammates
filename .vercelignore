@@ -1,0 +1,7 @@
+.agents
+.env*
+.firecrawl
+.neon
+.trigger
+/state
+*.tsbuildinfo

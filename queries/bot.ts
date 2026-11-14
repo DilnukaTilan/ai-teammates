@@ -5,13 +5,16 @@ import { asc, eq } from "drizzle-orm"
 import { cache } from "react"
 
 import { db } from "@/lib/db"
+import { retryReadOnConnectTimeout } from "@/lib/db/read-retry"
 import { bots } from "@/lib/db/schema"
 
 export const getBots = cache(async function getBots() {
   const { userId } = await auth.protect()
-  return db
-    .select({ id: bots.id, name: bots.name, avatar: bots.avatar })
-    .from(bots)
-    .where(eq(bots.userId, userId))
-    .orderBy(asc(bots.name), asc(bots.id))
+  return retryReadOnConnectTimeout(() =>
+    db
+      .select({ id: bots.id, name: bots.name, avatar: bots.avatar })
+      .from(bots)
+      .where(eq(bots.userId, userId))
+      .orderBy(asc(bots.name), asc(bots.id))
+  )
 })

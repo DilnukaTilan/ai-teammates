@@ -137,7 +137,7 @@ export async function updateGroupChat(
             .select({
               chatId: chats.id,
               botId: bots.id,
-              joinedAt: sql<Date>`now()`,
+              joinedAt: sql<Date>`now()`.as("joined_at"),
             })
             .from(bots)
             .innerJoin(chats, groupFilter)

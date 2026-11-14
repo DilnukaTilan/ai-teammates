@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server"
 import { and, asc, desc, eq, inArray } from "drizzle-orm"
 
 import { db } from "@/lib/db"
+import { retryReadOnConnectTimeout } from "@/lib/db/read-retry"
 import { bots, chatMembers, chats } from "@/lib/db/schema"
 
 function ownedMembers(userId: string) {
@@ -45,24 +46,26 @@ export async function getChat(chatId: string) {
 
 export async function getChats() {
   const { userId } = await auth.protect()
-  const rows = await db.query.chats.findMany({
-    columns: {
-      id: true,
-      kind: true,
-      name: true,
-      lastMessageAt: true,
-      lastMessagePreview: true,
-    },
-    where: eq(chats.userId, userId),
-    orderBy: [desc(chats.lastMessageAt), desc(chats.id)],
-    with: {
-      members: {
-        ...ownedMembers(userId),
-        columns: {},
-        with: { bot: { columns: { id: true, name: true, avatar: true } } },
+  const rows = await retryReadOnConnectTimeout(() =>
+    db.query.chats.findMany({
+      columns: {
+        id: true,
+        kind: true,
+        name: true,
+        lastMessageAt: true,
+        lastMessagePreview: true,
       },
-    },
-  })
+      where: eq(chats.userId, userId),
+      orderBy: [desc(chats.lastMessageAt), desc(chats.id)],
+      with: {
+        members: {
+          ...ownedMembers(userId),
+          columns: {},
+          with: { bot: { columns: { id: true, name: true, avatar: true } } },
+        },
+      },
+    })
+  )
 
   return rows.map(({ members, ...chat }) => {
     const bots = members.map(({ bot }) => bot)
