@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm"
 import {
   check,
   index,
+  integer,
   pgEnum,
   pgTable,
   primaryKey,
@@ -11,6 +12,45 @@ import {
 import { createInsertSchema } from "drizzle-zod"
 import { nanoid } from "nanoid"
 import { z } from "zod"
+
+export const usageMeter = pgEnum("usage_meter", [
+  "ai",
+  "sandbox_minutes",
+  "sandbox_creations",
+])
+
+export const usagePeriods = pgTable(
+  "usage_periods",
+  {
+    userId: text("user_id").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    meter: usageMeter("meter").notNull(),
+    used: integer("used").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.periodStart, table.meter] }),
+    check("usage_periods_used_nonnegative", sql`${table.used} >= 0`),
+  ]
+)
+
+export const usageEntries = pgTable("usage_entries", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+  meter: usageMeter("meter").notNull(),
+  reserved: integer("reserved").notNull(),
+  actual: integer("actual"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})
+
+export const sandboxSessions = pgTable("sandbox_sessions", {
+  sandbox: text("sandbox").primaryKey(),
+  id: text("id").notNull().unique(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  readyAt: timestamp("ready_at", { withTimezone: true }),
+})
 
 export const bots = pgTable(
   "bots",

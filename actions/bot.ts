@@ -13,6 +13,8 @@ import { redirect } from "next/navigation"
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
 
+import { paidPlan, paidPlanRequired } from "@/lib/billing"
+import { getPaidBillingPeriod } from "@/lib/billing-subscription"
 import { botMemoryPath } from "@/lib/bot-memory"
 import { createDaytona } from "@/lib/daytona"
 import { db } from "@/lib/db"
@@ -27,6 +29,9 @@ import {
   type CreateBotInput,
   type UpdateBotInput,
 } from "@/lib/db/schema"
+import { startSandboxSession } from "@/lib/sandbox-usage"
+import { sandboxSessionMinutes, UsageLimitError } from "@/lib/usage"
+import { reserveUsage, settleUsage } from "@/lib/usage-ledger"
 
 async function deleteSandbox(daytona: Daytona, sandboxIdOrName: string) {
   try {
@@ -38,7 +43,9 @@ async function deleteSandbox(daytona: Daytona, sandboxIdOrName: string) {
 }
 
 export async function createBot(input: CreateBotInput) {
-  const { userId } = await auth.protect()
+  const { userId, has } = await auth.protect()
+  if (!has({ plan: paidPlan })) return paidPlanRequired
+
   const parsed = createBotSchema.safeParse(input)
 
   if (!parsed.success) {
@@ -61,20 +68,44 @@ export async function createBot(input: CreateBotInput) {
   let daytona: Daytona | undefined
   let sandboxId: string | undefined
   let bot: Pick<Bot, "name"> | undefined
+  let creation: string | undefined
 
   try {
-    daytona = createDaytona()
-    const sandbox = await daytona.create({ name: sandboxName })
-    sandboxId = sandbox.id
-    const memory = await sandbox.process.executeCommand(
-      `: > ${botMemoryPath}`,
-      undefined,
-      undefined,
-      15
-    )
-    if (memory.exitCode !== 0) {
-      throw new Error("Could not initialize bot memory.")
-    }
+    const period = await getPaidBillingPeriod(userId)
+    if (!period) return paidPlanRequired
+
+    creation = await reserveUsage(period, "sandbox_creations", 1)
+    await startSandboxSession(period, sandboxName, async () => {
+      daytona = createDaytona()
+      const sandbox = await daytona.create({
+        name: sandboxName,
+        snapshot: "daytona-small",
+        public: false,
+        autoStopInterval: sandboxSessionMinutes,
+        autoArchiveInterval: 1,
+        // Cleanup clears this safety deadline after compute has stopped.
+        ttlMinutes: sandboxSessionMinutes + 1,
+      })
+      sandboxId = sandbox.id
+      const memory = await sandbox.process.executeCommand(
+        `: > ${botMemoryPath}`,
+        undefined,
+        undefined,
+        15
+      )
+      if (memory.exitCode !== 0)
+        throw new Error("Could not initialize bot memory.")
+      if (
+        sandbox.cpu > 1 ||
+        sandbox.memory > 1 ||
+        sandbox.disk > 3 ||
+        sandbox.gpu
+      ) {
+        throw new Error("The snapshot exceeds the Pro sandbox resource limits.")
+      }
+    })
+
+    if (!sandboxId) throw new Error("Sandbox provisioning did not finish.")
 
     const [[createdBot]] = await db.batch([
       db
@@ -89,7 +120,21 @@ export async function createBot(input: CreateBotInput) {
 
     if (!createdBot) throw new Error("Bot insert returned no row.")
     bot = createdBot
+    if (creation) {
+      await settleUsage(creation, 1).catch((error) => {
+        console.error("Could not settle sandbox creation", error)
+      })
+    }
   } catch (error) {
+    if (creation && !daytona) {
+      await settleUsage(creation, 0).catch((settlementError) => {
+        console.error(
+          "Could not release unused sandbox creation",
+          settlementError
+        )
+      })
+    }
+    if (error instanceof UsageLimitError) return error.toResult()
     console.error("Failed to create bot:", error)
 
     if (daytona && (sandboxId || !(error instanceof DaytonaConflictError))) {
@@ -132,7 +177,9 @@ export async function createBot(input: CreateBotInput) {
 }
 
 export async function updateBot(botId: string, input: UpdateBotInput) {
-  const { userId } = await auth.protect()
+  const { userId, has } = await auth.protect()
+  if (!has({ plan: paidPlan })) return paidPlanRequired
+
   const parsed = updateBotSchema.safeParse(input)
 
   if (!parsed.success) {
@@ -180,7 +227,9 @@ export async function updateBot(botId: string, input: UpdateBotInput) {
 }
 
 export async function deleteBot(botId: string) {
-  const { userId } = await auth.protect()
+  const { userId, has } = await auth.protect()
+  if (!has({ plan: paidPlan })) return paidPlanRequired
+
   const parsedId = z.string().trim().min(1).max(100).safeParse(botId)
 
   if (!parsedId.success) {

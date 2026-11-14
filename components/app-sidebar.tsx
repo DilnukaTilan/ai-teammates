@@ -2,7 +2,7 @@
 
 import { UserButton } from "@clerk/nextjs"
 import { formatDistanceStrict } from "date-fns"
-import { PlusIcon, SearchIcon, UsersIcon, XIcon } from "lucide-react"
+import { GaugeIcon, PlusIcon, SearchIcon, UsersIcon, XIcon } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
@@ -43,7 +43,9 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { usePaidPlan } from "@/hooks/use-paid-plan"
 import type { ChatBot } from "@/lib/db/schema"
+import { usagePath } from "@/lib/usage"
 import type { SidebarChat } from "@/queries/chats"
 
 type AppSidebarProps = {
@@ -95,6 +97,7 @@ function ChatRow({
 export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
   const { chatId } = useParams<{ chatId?: string }>()
   const router = useRouter()
+  const { requirePaidPlan } = usePaidPlan()
   const { state, isMobile, setOpenMobile } = useSidebar()
   const iconOnly = state === "collapsed" && !isMobile
   const [botDialogOpen, setBotDialogOpen] = useState(false)
@@ -169,11 +172,27 @@ export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={() => setBotDialogOpen(true)}>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      if (requirePaidPlan()) {
+                        setBotDialogOpen(true)
+                      } else {
+                        setOpenMobile(false)
+                      }
+                    }}
+                  >
                     <PlusIcon aria-hidden="true" />
                     Create new bot
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setGroupDialogOpen(true)}>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      if (requirePaidPlan()) {
+                        setGroupDialogOpen(true)
+                      } else {
+                        setOpenMobile(false)
+                      }
+                    }}
+                  >
                     <UsersIcon aria-hidden="true" />
                     Create group chat
                   </DropdownMenuItem>
@@ -224,7 +243,10 @@ export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
                       render={
                         <Link
                           href={`/chats/${encodeURIComponent(chat.id)}`}
-                          onNavigate={() => setOpenMobile(false)}
+                          onNavigate={(event) => {
+                            setOpenMobile(false)
+                            if (!requirePaidPlan()) event.preventDefault()
+                          }}
                         />
                       }
                       isActive={chat.id === chatId}
@@ -296,7 +318,15 @@ export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
                       },
                     },
                   }}
-                />
+                >
+                  <UserButton.MenuItems>
+                    <UserButton.Link
+                      label="Usage"
+                      labelIcon={<GaugeIcon size={16} />}
+                      href={usagePath}
+                    />
+                  </UserButton.MenuItems>
+                </UserButton>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -329,6 +359,7 @@ export function AppSidebar({ bots, chats, referenceDate }: AppSidebarProps) {
                   onSelect={() => {
                     setSearchOpen(false)
                     setOpenMobile(false)
+                    if (!requirePaidPlan()) return
                     router.push(`/chats/${encodeURIComponent(chat.id)}`)
                   }}
                   className="[&>svg:last-child]:hidden"

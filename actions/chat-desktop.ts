@@ -1,16 +1,26 @@
 "use server"
 
-import { DaytonaConflictError, SandboxState } from "@daytona/sdk"
-
-import { createDaytona } from "@/lib/daytona"
+import { auth } from "@clerk/nextjs/server"
+import { paidPlan, paidPlanRequired } from "@/lib/billing"
+import { getPaidBillingPeriod } from "@/lib/billing-subscription"
+import {
+  assertSandboxSessionTime,
+  openSandboxSession,
+} from "@/lib/sandbox-usage"
+import { UsageLimitError, type UsageFailure } from "@/lib/usage"
 import { getChat } from "@/queries/chats"
 
 const vncPort = 6080
-const previewLifetimeSeconds = 3600
+const previewLifetimeSeconds = 60
 
 export async function connectChatDesktop(
   chatId: string
-): Promise<{ url: string } | { error: string }> {
+): Promise<
+  { url: string } | { error: string } | typeof paidPlanRequired | UsageFailure
+> {
+  const { has, userId } = await auth.protect()
+  if (!has({ plan: paidPlan })) return paidPlanRequired
+
   if (typeof chatId !== "string" || !chatId) {
     return { error: "Desktop unavailable." }
   }
@@ -27,35 +37,30 @@ export async function connectChatDesktop(
   }
 
   try {
-    const sandbox = await createDaytona(30_000).get(bot.sandboxId)
-    switch (sandbox.state) {
-      case SandboxState.STARTED:
-        break
-      case SandboxState.STOPPED:
-      case SandboxState.PAUSED:
-      case SandboxState.ARCHIVED:
-        try {
-          await sandbox.start()
-        } catch (error) {
-          if (!(error instanceof DaytonaConflictError)) throw error
-          await sandbox.waitUntilStarted()
-        }
-        break
-      default:
-        await sandbox.waitUntilStarted()
-    }
+    const period = await getPaidBillingPeriod(userId)
+    if (!period) return paidPlanRequired
+    const { resource: sandbox, endsAt } = await openSandboxSession(
+      period,
+      bot.sandboxId
+    )
+    assertSandboxSessionTime(endsAt, 30)
 
     const vnc = await sandbox.computerUse.getProcessStatus("novnc")
     if (!vnc.running) await sandbox.computerUse.start()
 
+    assertSandboxSessionTime(endsAt, 5)
     const preview = await sandbox.getSignedPreviewUrl(
       vncPort,
-      previewLifetimeSeconds
+      Math.min(
+        previewLifetimeSeconds,
+        Math.floor((endsAt.getTime() - Date.now()) / 1000)
+      )
     )
     const websocket = new URL("/websockify", preview.url)
     websocket.protocol = "wss:"
     return { url: websocket.href }
   } catch (error) {
+    if (error instanceof UsageLimitError) return error.toResult()
     console.error("Unable to connect to the Daytona desktop", {
       error: error instanceof Error ? error.name : "Unknown error",
     })

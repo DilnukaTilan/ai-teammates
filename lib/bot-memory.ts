@@ -1,13 +1,22 @@
 import { DaytonaNotFoundError } from "@daytona/sdk"
 
-import { getStartedSandbox } from "./daytona"
+import type { BillingPeriod } from "./billing-subscription"
+import { assertSandboxSessionTime, openSandboxSession } from "./sandbox-usage"
 
 export const botMemoryPath = "MEMORY.md"
 const maxMemoryBytes = 32 * 1024
 
-export async function readBotMemory(sandboxId: string, signal: AbortSignal) {
+export async function readBotMemory(
+  period: BillingPeriod,
+  sandboxId: string,
+  signal: AbortSignal
+) {
   signal.throwIfAborted()
-  const { fs } = await getStartedSandbox(sandboxId)
+  const {
+    resource: { fs },
+    endsAt,
+  } = await openSandboxSession(period, sandboxId)
+  assertSandboxSessionTime(endsAt, 20)
   signal.throwIfAborted()
 
   try {

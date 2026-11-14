@@ -22,6 +22,7 @@ import {
 import {
   PromptInput,
   PromptInputFooter,
+  PromptInputProvider,
   PromptInputSelect,
   PromptInputSelectContent,
   PromptInputSelectItem,
@@ -43,6 +44,9 @@ import {
   TraceLine,
   TraceTitle,
 } from "@/components/ui/trace"
+import { usePaidPlan } from "@/hooks/use-paid-plan"
+import { paidPlanRequired } from "@/lib/billing"
+import { isUsageLimitMessage } from "@/lib/usage"
 import type { ChatBot } from "@/lib/db/schema"
 import type { TeammateChatMessage } from "@/trigger/chat"
 
@@ -310,11 +314,20 @@ export function Chat({
   lastEventId?: string
   groupBots?: GroupBot[]
 }) {
+  const { requirePaidPlan, showUpgrade, showUsageLimit } = usePaidPlan()
   const [transport] = useState(() => {
     const transport = new TriggerChatTransport({
       task: "teammate-chat",
-      accessToken: ({ chatId }) => mintChatAccessToken(chatId),
-      startSession: ({ chatId }) => startChatSession(chatId),
+      accessToken: async ({ chatId }) => {
+        const result = await mintChatAccessToken(chatId)
+        if (typeof result !== "string") throw new Error(result.error)
+        return result
+      },
+      startSession: async ({ chatId }) => {
+        const result = await startChatSession(chatId)
+        if ("code" in result) throw new Error(result.error)
+        return result
+      },
     })
     if (lastEventId) {
       transport.seedResumeCursor(chatId, lastEventId)
@@ -327,6 +340,10 @@ export function Chat({
       id: chatId,
       messages: initialMessages,
       transport,
+      onError(error) {
+        if (error.message === paidPlanRequired.error) showUpgrade()
+        if (isUsageLimitMessage(error.message)) showUsageLimit(error.message)
+      },
     })
   const isGenerating = status === "submitted" || status === "streaming"
   const [selectedBotId, setSelectedBotId] = useState<string | null>(null)
@@ -335,7 +352,7 @@ export function Chat({
   const canSend = !groupBots || !!selectedBot
 
   return (
-    <>
+    <PromptInputProvider>
       <Conversation className="min-h-0" aria-label="Conversation">
         <ConversationContent className="mx-auto min-h-full w-full max-w-3xl px-4 sm:px-6">
           {messages.length === 0 && (
@@ -378,16 +395,19 @@ export function Chat({
       </Conversation>
 
       <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 sm:px-6">
-        {error && (
-          <p role="alert" className="mb-2 text-sm text-destructive">
-            Couldn’t get a reply. Please try again.
-          </p>
-        )}
+        {error &&
+          error.message !== paidPlanRequired.error &&
+          !isUsageLimitMessage(error.message) && (
+            <p role="alert" className="mb-2 text-sm text-destructive">
+              Couldn’t get a reply. Please try again.
+            </p>
+          )}
         <PromptInput
           maxFiles={0}
           onSubmit={({ text }) => {
             const message = text.trim()
             if (message && !isGenerating && canSend) {
+              if (!requirePaidPlan()) throw new Error(paidPlanRequired.error)
               void sendMessage(
                 { text: message },
                 selectedBot
@@ -465,6 +485,6 @@ export function Chat({
           </PromptInputFooter>
         </PromptInput>
       </div>
-    </>
+    </PromptInputProvider>
   )
 }

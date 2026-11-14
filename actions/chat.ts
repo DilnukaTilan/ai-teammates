@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache"
 import { notFound, redirect } from "next/navigation"
 import { z } from "zod"
 
+import { paidPlan, paidPlanRequired } from "@/lib/billing"
 import { db } from "@/lib/db"
 import {
   bots,
@@ -40,7 +41,9 @@ function invalidGroupBots() {
 }
 
 export async function createGroupChat(input: CreateGroupChatInput) {
-  const { userId } = await auth.protect()
+  const { userId, has } = await auth.protect()
+  if (!has({ plan: paidPlan })) return paidPlanRequired
+
   const parsed = createGroupChatSchema.safeParse(input)
 
   if (!parsed.success) {
@@ -82,7 +85,9 @@ export async function updateGroupChat(
   chatId: string,
   input: CreateGroupChatInput
 ) {
-  const { userId } = await auth.protect()
+  const { userId, has } = await auth.protect()
+  if (!has({ plan: paidPlan })) return paidPlanRequired
+
   const parsedId = groupChatIdSchema.safeParse(chatId)
   const parsed = createGroupChatSchema.safeParse(input)
 
@@ -160,7 +165,9 @@ export async function updateGroupChat(
 }
 
 export async function deleteGroupChat(chatId: string) {
-  const { userId } = await auth.protect()
+  const { userId, has } = await auth.protect()
+  if (!has({ plan: paidPlan })) return paidPlanRequired
+
   const parsedId = groupChatIdSchema.safeParse(chatId)
   if (!parsedId.success) {
     return { success: false as const, error: "Could not find your group chat." }
@@ -202,11 +209,17 @@ async function requireChat(chatId: string) {
 }
 
 export async function startChatSession(chatId: string) {
+  const { has } = await auth.protect()
+  if (!has({ plan: paidPlan })) return paidPlanRequired
+
   await requireChat(chatId)
   return startSession({ chatId })
 }
 
 export async function mintChatAccessToken(chatId: string) {
+  const { has } = await auth.protect()
+  if (!has({ plan: paidPlan })) return paidPlanRequired
+
   await requireChat(chatId)
   return triggerAuth.createPublicToken({
     scopes: { read: { sessions: chatId }, write: { sessions: chatId } },

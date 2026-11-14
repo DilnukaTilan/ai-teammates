@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server"
 import { defaultStorage } from "@trigger.dev/sdk/ai"
 import { notFound } from "next/navigation"
 
@@ -7,11 +8,13 @@ import {
 } from "@/components/chat-desktop-panel"
 import { ChatHeader, GroupChatHeader } from "@/components/chat-header"
 import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
+import { paidPlan } from "@/lib/billing"
 import { getBots } from "@/queries/bot"
 import { getChat } from "@/queries/chats"
 import type { TeammateChatMessage } from "@/trigger/chat"
 
 import { Chat } from "./chat"
+import { ChatUpgrade } from "./chat-upgrade"
 
 const desktopPanelId = "chat-desktop-panel"
 
@@ -20,6 +23,9 @@ export default async function Page({
 }: {
   params: Promise<{ chatId: string }>
 }) {
+  const { has } = await auth.protect()
+  if (!has({ plan: paidPlan })) return <ChatUpgrade />
+
   const { chatId } = await params
   const chat = await getChat(chatId)
   if (!chat) notFound()

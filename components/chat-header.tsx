@@ -10,6 +10,7 @@ import { GroupChatDialog } from "@/components/group-chat-dialog"
 import { Button } from "@/components/ui/button"
 import { DialogTrigger } from "@/components/ui/dialog"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { usePaidPlan } from "@/hooks/use-paid-plan"
 import type { ChatBot, EditableBot } from "@/lib/db/schema"
 
 const headerClassName =
@@ -22,6 +23,7 @@ type ChatHeaderProps = {
 
 export function ChatHeader({ bot, desktopPanelId }: ChatHeaderProps) {
   const { open, isMobile, fullscreenDialog, toggle } = useChatDesktopPanel()
+  const { canUsePaidPlan, requirePaidPlan } = usePaidPlan()
   const desktopButton = (
     <Button
       type="button"
@@ -32,8 +34,10 @@ export function ChatHeader({ bot, desktopPanelId }: ChatHeaderProps) {
       {...(!isMobile && {
         "aria-expanded": open,
         "aria-controls": open ? desktopPanelId : undefined,
-        onClick: toggle,
       })}
+      onClick={() => {
+        if (requirePaidPlan() && !isMobile) toggle()
+      }}
     >
       <MonitorIcon aria-hidden="true" data-icon="inline-start" />
     </Button>
@@ -55,7 +59,7 @@ export function ChatHeader({ bot, desktopPanelId }: ChatHeaderProps) {
           </Button>
         </BotDialog>
       </h1>
-      {isMobile ? (
+      {isMobile && canUsePaidPlan ? (
         <DialogTrigger handle={fullscreenDialog} render={desktopButton} />
       ) : (
         desktopButton

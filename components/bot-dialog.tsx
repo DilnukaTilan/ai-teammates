@@ -50,6 +50,7 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/toast"
+import { usePaidPlan } from "@/hooks/use-paid-plan"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { createBotSchema, type EditableBot } from "@/lib/db/schema"
 
@@ -93,6 +94,7 @@ export function BotDialog({
   onOpenChange,
   finalFocus,
 }: BotDialogProps) {
+  const { requirePaidPlan, showUpgrade, showUsageLimit } = usePaidPlan()
   const [internalOpen, setInternalOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -146,6 +148,15 @@ export function BotDialog({
         : await createBot(values)
 
       if (!result.success) {
+        if ("code" in result) {
+          setOpen(false)
+          if (result.code === "USAGE_LIMIT") {
+            showUsageLimit(result.error)
+          } else {
+            showUpgrade()
+          }
+          return
+        }
         if (result.fieldErrors) {
           for (const field of [
             "name",
@@ -184,6 +195,12 @@ export function BotDialog({
 
     try {
       const result = await deleteBot(bot.id)
+      if ("code" in result) {
+        setDeleteOpen(false)
+        setOpen(false)
+        showUpgrade()
+        return
+      }
       setDeleteError(result.error)
     } catch (error) {
       // Let Next.js handle the successful deletion's redirect.
@@ -201,6 +218,7 @@ export function BotDialog({
       open={open}
       onOpenChange={(nextOpen) => {
         if (pending || deleteOpen) return
+        if (nextOpen && !requirePaidPlan()) return
         setOpen(nextOpen)
       }}
     >

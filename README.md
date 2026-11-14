@@ -39,6 +39,33 @@ Route Handler, and Server Action with `await auth.protect()` before accessing
 private data. Header visibility is only presentation. Keep request-dependent
 auth UI inside `Suspense`; protected pages can use a sibling `loading.tsx`.
 
+## Billing
+
+Clerk user Billing is enabled on `ai-teammates-dev`. The public Pro plan
+(`pro`) costs $20 USD per month on Clerk’s development payment gateway.
+Clerk assigns its Free plan by default. Pro is required to use bots and their
+sandboxes. Upgrade toasts link to `/pricing`, where Clerk handles checkout.
+
+For another Clerk instance, enable user Billing and create a public recurring
+user plan with the slug `pro`. Production checkout requires a Stripe account
+connected in Clerk. Set `CLERK_SECRET_KEY` in the matching Trigger.dev
+environment as well as in Next.js so the chat worker can check the subscription
+before each turn.
+
+The sidebar account menu opens **Usage**. The Pro allowance per Clerk billing
+period is $5 of metered GPT-5.6 Luna requests, 60 hours of booked Daytona
+time, and 10 sandbox provisioning attempts. There are no overage charges.
+AI usage includes cached input, output, and reasoning tokens. The ledger
+reserves a worst-case charge before each provider call and settles against
+reported usage. A call without usage telemetry retains its reservation.
+
+Daytona sessions run for up to 10 minutes and book 12 minutes of allowance
+to cover lifecycle overhead. The app uses the `daytona-small` container
+snapshot and normally stops and archives the filesystem at the end of a
+session. A Daytona TTL can delete the sandbox and its files if the cleanup
+worker is unavailable. Run the Trigger.dev worker with the same development
+database and deploy it alongside the app so both cleanup tasks are available.
+
 ```bash
 npm run typecheck
 npm run lint

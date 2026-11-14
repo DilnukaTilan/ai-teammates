@@ -45,6 +45,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
+import { usePaidPlan } from "@/hooks/use-paid-plan"
 import {
   createGroupChatSchema,
   type ChatBot,
@@ -78,6 +79,7 @@ export function GroupChatDialog({
   onOpenChange,
   finalFocus,
 }: GroupChatDialogProps) {
+  const { requirePaidPlan, showUpgrade } = usePaidPlan()
   const [internalOpen, setInternalOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -115,6 +117,11 @@ export function GroupChatDialog({
         return
       }
 
+      if ("code" in result) {
+        setOpen(false)
+        showUpgrade()
+        return
+      }
       const fieldErrors: Partial<Record<keyof CreateGroupChatInput, string[]>> =
         result.fieldErrors ?? {}
       let hasFieldError = false
@@ -142,6 +149,12 @@ export function GroupChatDialog({
 
     try {
       const result = await deleteGroupChat(group.id)
+      if ("code" in result) {
+        setDeleteOpen(false)
+        setOpen(false)
+        showUpgrade()
+        return
+      }
       setDeleteError(result.error)
     } catch (error) {
       unstable_rethrow(error)
@@ -158,6 +171,7 @@ export function GroupChatDialog({
       open={open}
       onOpenChange={(nextOpen) => {
         if (pending || deleteOpen) return
+        if (nextOpen && !requirePaidPlan()) return
         if (nextOpen && group) reset({ name: group.name, botIds: group.botIds })
         setOpen(nextOpen)
       }}

@@ -2,7 +2,12 @@ import type { Sandbox } from "@daytona/sdk"
 import { tool } from "ai"
 import { z } from "zod"
 
-import { getStartedSandbox } from "../lib/daytona"
+import type { BillingPeriod } from "../lib/billing-subscription"
+import {
+  assertSandboxSessionTime,
+  openSandboxSession,
+} from "../lib/sandbox-usage"
+import { UsageLimitError } from "../lib/usage"
 
 const path = z.string().min(1).max(4096)
 const coordinates = {
@@ -22,40 +27,13 @@ function limitText(text: string) {
   }
 }
 
-export function createSandboxTools(sandboxId?: string) {
-  let sandboxPromise: Promise<Sandbox> | undefined
-  let desktopPromise: Promise<Sandbox> | undefined
+export function createSandboxTools(access?: {
+  sandboxId: string
+  period: BillingPeriod
+}) {
+  let session: Awaited<ReturnType<typeof openSandboxSession>> | undefined
   // Image bytes for view_screen live only in the active model call's tool set.
   const privateScreens = new Map<string, string>()
-
-  async function startSandbox() {
-    if (!sandboxId) throw new SandboxToolError("This bot has no sandbox.")
-    return getStartedSandbox(sandboxId)
-  }
-
-  function getSandbox() {
-    return (sandboxPromise ??= startSandbox().catch((error) => {
-      sandboxPromise = undefined
-      throw error
-    }))
-  }
-
-  function getDesktop(signal?: AbortSignal) {
-    return (desktopPromise ??= getSandbox()
-      .then(async (sandbox) => {
-        signal?.throwIfAborted()
-        const display = await sandbox.computerUse.getProcessStatus("xvfb")
-        if (!display.running) {
-          signal?.throwIfAborted()
-          await sandbox.computerUse.start()
-        }
-        return sandbox
-      })
-      .catch((error) => {
-        desktopPromise = undefined
-        throw error
-      }))
-  }
 
   async function execute<T>(
     signal: AbortSignal | undefined,
@@ -64,12 +42,26 @@ export function createSandboxTools(sandboxId?: string) {
   ) {
     try {
       signal?.throwIfAborted()
-      const sandbox = await (desktop ? getDesktop(signal) : getSandbox())
+      if (!access) throw new SandboxToolError("This bot has no sandbox.")
+      if (!session || session.endsAt.getTime() <= Date.now()) {
+        session = await openSandboxSession(access.period, access.sandboxId)
+      }
+      const { resource: sandbox, endsAt } = session
+      if (
+        desktop &&
+        !(await sandbox.computerUse.getProcessStatus("xvfb")).running
+      ) {
+        assertSandboxSessionTime(endsAt, 30)
+        await sandbox.computerUse.start()
+      }
       signal?.throwIfAborted()
+      assertSandboxSessionTime(endsAt)
       return await operation(sandbox)
     } catch (error) {
       signal?.throwIfAborted()
       if (error instanceof SandboxToolError) throw error
+      if (error instanceof UsageLimitError)
+        throw new SandboxToolError(error.message)
 
       console.error("Daytona tool request failed", {
         error: error instanceof Error ? error.name : "Unknown error",

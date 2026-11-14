@@ -25,6 +25,8 @@ import {
 import { ResizableHandle, ResizablePanel } from "@/components/ui/resizable"
 import { Spinner } from "@/components/ui/spinner"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { usePaidPlan } from "@/hooks/use-paid-plan"
+import { paidPlanRequired } from "@/lib/billing"
 
 const ChatDesktopPanelContext = createContext<{
   open: boolean
@@ -94,6 +96,8 @@ export function ChatDesktopPanel({
 }) {
   const { open, hasOpened, fullscreenDialog, startDesktop } =
     useChatDesktopPanel()
+  const { canUsePaidPlan, showUpgrade, showUsageLimit, requirePaidPlan } =
+    usePaidPlan()
   const [fullscreen, setFullscreen] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [status, setStatus] = useState<DesktopStatus>({ state: "connecting" })
@@ -130,6 +134,12 @@ export function ChatDesktopPanel({
 
     async function connect() {
       try {
+        if (!canUsePaidPlan) {
+          fail(paidPlanRequired.error)
+          setFullscreen(false)
+          showUpgrade()
+          return
+        }
         const { default: VncClient } = await import("@novnc/novnc")
         if (!active) return
 
@@ -137,6 +147,14 @@ export function ChatDesktopPanel({
         if (!active) return
         if ("error" in result) {
           fail(result.error)
+          if ("code" in result) {
+            setFullscreen(false)
+            if (result.code === "USAGE_LIMIT") {
+              showUsageLimit(result.error)
+            } else {
+              showUpgrade()
+            }
+          }
           return
         }
 
@@ -175,7 +193,7 @@ export function ChatDesktopPanel({
       client?.disconnect()
       clientRef.current = null
     }
-  }, [attempt, chatId, hasOpened])
+  }, [attempt, canUsePaidPlan, chatId, hasOpened, showUpgrade, showUsageLimit])
 
   const reconnect = (
     <Button
@@ -186,6 +204,7 @@ export function ChatDesktopPanel({
       title="Reconnect desktop"
       disabled={status.state === "connecting"}
       onClick={() => {
+        if (!requirePaidPlan()) return
         setStatus({ state: "connecting" })
         setAttempt((previous) => previous + 1)
       }}
@@ -210,6 +229,7 @@ export function ChatDesktopPanel({
   return (
     <Dialog
       handle={fullscreenDialog}
+      open={fullscreen}
       disablePointerDismissal
       onOpenChange={(next, details) => {
         if (!next && details.reason !== "close-press") {
